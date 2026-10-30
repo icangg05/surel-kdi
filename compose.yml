@@ -1,0 +1,91 @@
+# Lingkungan dev KDI Mail. Port sengaja digeser dari proyek lain di mesin ini
+# (trade-history memakai 8000/3306/5173) supaya bisa jalan bersamaan.
+x-php: &php
+    build:
+        context: .
+        target: dev
+    # Berjalan sebagai user host: berkas yang ditulis aplikasi (lampiran email,
+    # log) langsung dimiliki user yang sama di host, tanpa sudo.
+    user: '${UID:-1000}:${GID:-1000}'
+    volumes:
+        - .:/app
+    # Tanpa `env_file`: Laravel membaca /app/.env langsung dari bind mount, jadi
+    # nilai yang di-set phpunit tidak tertimpa variabel proses.
+    depends_on:
+        mysql:
+            condition: service_healthy
+    restart: unless-stopped
+
+services:
+    app:
+        <<: *php
+        ports:
+            - '8010:80'
+        # Healthcheck bawaan image FrankenPHP memakai endpoint admin yang sengaja
+        # dimatikan di Caddyfile; dipakai route /up milik Laravel saja.
+        healthcheck:
+            test: ['CMD', 'curl', '-fsS', 'http://127.0.0.1/up']
+            interval: 15s
+            timeout: 5s
+            retries: 5
+            start_period: 20s
+
+    # Pekerja antrean: semua pengiriman (email biasa & siaran), pemrosesan email
+    # masuk, dan unduhan lampiran Brevo lewat sini. Matikan servis ini dan
+    # email berhenti berangkat.
+    queue:
+        <<: *php
+        command: php artisan queue:work --queue=default,broadcast --tries=5 --sleep=2 --max-time=3600
+        healthcheck:
+            disable: true
+
+    # Penjadwal: melepas email/siaran terjadwal, sinkron akun Brevo, cek DNS.
+    scheduler:
+        <<: *php
+        command: php artisan schedule:work
+        healthcheck:
+            disable: true
+
+    mysql:
+        image: mysql:8.4
+        environment:
+            MYSQL_DATABASE: kdi_mail
+            MYSQL_USER: kdimail
+            MYSQL_PASSWORD: secret
+            MYSQL_ROOT_PASSWORD: secret
+        ports:
+            - '3310:3306'
+        volumes:
+            - dbdata:/var/lib/mysql
+        healthcheck:
+            test: ['CMD', 'mysqladmin', 'ping', '-h', '127.0.0.1', '-psecret']
+            interval: 5s
+            timeout: 5s
+            retries: 20
+        restart: unless-stopped
+
+    # Vite dengan HMR. Memakai image PHP yang sama karena plugin Wayfinder
+    # memanggil artisan saat build. Bangun aset produksi sekali jalan:
+    #   docker compose run --rm vite npm run build
+    vite:
+        <<: *php
+        command: sh -c "npm install && npm run dev"
+        ports:
+            - '5174:5174'
+        healthcheck:
+            disable: true
+        depends_on: []
+
+    # URL HTTPS publik sementara untuk webhook Brevo saat dev:
+    #   docker compose --profile tunnel up tunnel
+    # lalu salin URL *.trycloudflare.com dari log ke APP_URL.
+    tunnel:
+        image: cloudflare/cloudflared:2026.10.5
+        command: tunnel --no-autoupdate --url http://app:80
+        profiles: ['tunnel']
+        depends_on:
+            - app
+        restart: 'no'
+
+volumes:
+    dbdata:

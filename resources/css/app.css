@@ -1,0 +1,359 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import '@fontsource-variable/ibm-plex-sans';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+    /* IBM Plex: keluarga yang sama dengan portal Diskominfo Kota Kendari. */
+    --font-sans:
+        'IBM Plex Sans Variable', 'IBM Plex Sans', ui-sans-serif, system-ui,
+        sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji';
+    --font-mono:
+        'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+    /* Sudut tipis: maksimal 4px di mana pun, 2px untuk elemen kecil (lencana, bilah). */
+    --radius-sm: calc(var(--radius) - 2px);
+    --radius-md: var(--radius);
+    --radius-lg: var(--radius);
+    --radius-xl: var(--radius);
+    --radius-2xl: var(--radius);
+    --radius-3xl: var(--radius);
+    --radius-4xl: var(--radius);
+
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-canvas: var(--canvas);
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-gold: var(--gold);
+    --color-gold-foreground: var(--gold-foreground);
+    --color-gold-strong: var(--gold-strong);
+    --color-gold-soft: var(--gold-soft);
+    --color-destructive: var(--destructive);
+    --color-destructive-foreground: var(--destructive-foreground);
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+
+    /* Warna status — dipakai badge pengiriman & siaran, konsisten di semua halaman. */
+    --color-success: var(--success);
+    --color-success-soft: var(--success-soft);
+    --color-info: var(--info);
+    --color-info-soft: var(--info-soft);
+    --color-warning: var(--warning);
+    --color-warning-soft: var(--warning-soft);
+    --color-danger: var(--danger);
+    --color-danger-soft: var(--danger-soft);
+    --color-unread: var(--unread);
+
+    --color-chart-1: var(--chart-1);
+    --color-chart-2: var(--chart-2);
+    --color-chart-3: var(--chart-3);
+    --color-chart-4: var(--chart-4);
+    --color-chart-5: var(--chart-5);
+
+    --color-sidebar: var(--sidebar-background);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-ring: var(--sidebar-ring);
+}
+
+:root {
+    /*
+      Dua warna merek: biru instansi dan emas, di atas netral berbias biru.
+      Sumber nilai sama dengan Design System "Surel Kendari"; kontras teks ≥4,5:1 di kedua tema.
+    */
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.264 0.035 263);
+    --canvas: oklch(0.965 0.011 252);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.264 0.035 263);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.264 0.035 263);
+    /* Biru instansi: struktur & aksi (skala portal Diskominfo, biru-600). */
+    --primary: oklch(0.438 0.15 258);
+    --primary-foreground: oklch(1 0 0);
+    --secondary: oklch(0.942 0.021 252);
+    --secondary-foreground: oklch(0.361 0.109 257);
+    --muted: oklch(0.962 0.01 253);
+    --muted-foreground: oklch(0.467 0.046 258);
+    --accent: oklch(0.942 0.021 252);
+    --accent-foreground: oklch(0.308 0.09 256);
+    --destructive: oklch(0.538 0.189 26);
+    --destructive-foreground: oklch(1 0 0);
+    --border: oklch(0.913 0.018 258);
+    --input: oklch(0.664 0.043 257);
+    --ring: oklch(0.438 0.15 258);
+    /* Emas: hanya aksi Tulis email + sorotan (menu aktif, kuota, avatar, bintang). Bukan warna teks di latar terang. */
+    --gold: oklch(0.811 0.166 85);
+    --gold-foreground: oklch(0.24 0.065 256);
+    --gold-strong: oklch(0.512 0.108 75);
+    --gold-soft: oklch(0.963 0.047 94);
+    /* Warna status — terpisah dari merek; peringatan oranye agar tak tertukar dengan emas. */
+    --success: oklch(0.507 0.113 157);
+    --success-soft: oklch(0.952 0.022 160);
+    --info: oklch(0.505 0.15 256);
+    --info-soft: oklch(0.927 0.029 258);
+    --warning: oklch(0.539 0.156 43);
+    --warning-soft: oklch(0.957 0.026 68);
+    --danger: oklch(0.538 0.189 26);
+    --danger-soft: oklch(0.946 0.022 24);
+    --unread: oklch(0.438 0.15 258);
+    /* Urutan seri tetap; divalidasi dataviz validate_palette.js di kartu terang & gelap. Merah khusus status gagal. */
+    --chart-1: oklch(0.505 0.15 256);
+    --chart-2: oklch(0.585 0.121 80);
+    --chart-3: oklch(0.569 0.101 184);
+    --chart-4: oklch(0.503 0.158 295);
+    --chart-5: oklch(0.573 0.172 357);
+    --radius: 0.25rem;
+    /* Biru malam: sidebar & bingkai aplikasi; emas sebagai sidebar-primary. */
+    --sidebar: oklch(0.308 0.09 256);
+    --sidebar-background: oklch(0.308 0.09 256);
+    --sidebar-foreground: oklch(0.942 0.021 252);
+    --sidebar-primary: oklch(0.811 0.166 85);
+    --sidebar-primary-foreground: oklch(0.24 0.065 256);
+    --sidebar-accent: oklch(0.367 0.096 255);
+    --sidebar-accent-foreground: oklch(1 0 0);
+    --sidebar-border: oklch(0.405 0.089 255);
+    --sidebar-ring: oklch(0.811 0.166 85);
+    /* Teks & status versi terang untuk pulau biru malam (lihat [data-sidebar] / .surface-navy). */
+    --on-navy-muted: oklch(0.817 0.06 254);
+    --on-navy-success: oklch(0.799 0.125 159);
+    --on-navy-warning: oklch(0.779 0.144 62);
+    --on-navy-danger: oklch(0.768 0.137 26);
+    --scrollbar-thumb: oklch(0.854 0.03 258);
+    --scrollbar-thumb-hover: oklch(0.664 0.043 257);
+}
+
+.dark {
+    color-scheme: dark;
+    --background: oklch(0.258 0.069 258);
+    --foreground: oklch(0.928 0.02 257);
+    --canvas: oklch(0.218 0.055 257);
+    --card: oklch(0.272 0.073 258);
+    --card-foreground: oklch(0.928 0.02 257);
+    --popover: oklch(0.296 0.078 258);
+    --popover-foreground: oklch(0.928 0.02 257);
+    --primary: oklch(0.771 0.086 251);
+    --primary-foreground: oklch(0.24 0.065 256);
+    --secondary: oklch(0.321 0.078 257);
+    --secondary-foreground: oklch(0.928 0.02 257);
+    --muted: oklch(0.281 0.068 256);
+    --muted-foreground: oklch(0.769 0.05 255);
+    --accent: oklch(0.321 0.078 257);
+    --accent-foreground: oklch(0.965 0.011 252);
+    --destructive: oklch(0.687 0.167 26);
+    --destructive-foreground: oklch(0.24 0.065 256);
+    --border: oklch(0.328 0.069 258);
+    --input: oklch(0.564 0.072 258);
+    --ring: oklch(0.771 0.086 251);
+    --gold: oklch(0.811 0.166 85);
+    --gold-foreground: oklch(0.24 0.065 256);
+    --gold-strong: oklch(0.843 0.151 88);
+    --gold-soft: oklch(0.285 0.048 91);
+    --success: oklch(0.756 0.132 158);
+    --success-soft: oklch(0.314 0.055 165);
+    --info: oklch(0.771 0.086 251);
+    --info-soft: oklch(0.312 0.083 257);
+    --warning: oklch(0.776 0.142 63);
+    --warning-soft: oklch(0.292 0.048 62);
+    --danger: oklch(0.745 0.127 26);
+    --danger-soft: oklch(0.27 0.055 16);
+    --unread: oklch(0.771 0.086 251);
+    /* Urutan seri tetap; divalidasi dataviz validate_palette.js di kartu terang & gelap. Merah khusus status gagal. */
+    --chart-1: oklch(0.622 0.161 255);
+    --chart-2: oklch(0.67 0.143 73);
+    --chart-3: oklch(0.63 0.108 183);
+    --chart-4: oklch(0.67 0.145 287);
+    --chart-5: oklch(0.622 0.171 1);
+    /* Biru malam: sidebar & bingkai aplikasi; emas sebagai sidebar-primary. */
+    --sidebar: oklch(0.196 0.05 256);
+    --sidebar-background: oklch(0.196 0.05 256);
+    --sidebar-foreground: oklch(0.928 0.02 257);
+    --sidebar-primary: oklch(0.811 0.166 85);
+    --sidebar-primary-foreground: oklch(0.24 0.065 256);
+    --sidebar-accent: oklch(0.287 0.077 258);
+    --sidebar-accent-foreground: oklch(1 0 0);
+    --sidebar-border: oklch(0.316 0.068 257);
+    --sidebar-ring: oklch(0.811 0.166 85);
+    --scrollbar-thumb: oklch(0.378 0.077 257);
+    --scrollbar-thumb-hover: oklch(0.476 0.085 258);
+}
+
+@layer base {
+    * {
+        @apply border-border outline-ring/50;
+    }
+
+    html {
+        text-rendering: optimizeLegibility;
+    }
+
+    body {
+        @apply bg-background text-foreground;
+        font-size: 14px;
+        line-height: 1.5;
+    }
+
+    .tabular {
+        font-variant-numeric: tabular-nums;
+    }
+
+    /*
+      Scrollbar tipis tanpa tombol panah. Chrome/Safari memakai ::-webkit-scrollbar
+      (yang diabaikan Chrome bila scrollbar-width/color ikut diset), jadi properti
+      standar hanya dipasang untuk Firefox.
+    */
+    ::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+    }
+
+    ::-webkit-scrollbar-track,
+    ::-webkit-scrollbar-corner {
+        background: transparent;
+    }
+
+    ::-webkit-scrollbar-button {
+        display: none;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background-color: var(--scrollbar-thumb);
+        background-clip: content-box;
+        border: 3px solid transparent;
+        border-radius: 9999px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background-color: var(--scrollbar-thumb-hover);
+    }
+
+    @supports not selector(::-webkit-scrollbar) {
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: var(--scrollbar-thumb) transparent;
+        }
+    }
+}
+
+@layer components {
+    /*
+      Pulau biru malam: sidebar ([data-sidebar='sidebar']) dan .surface-navy (kartu kuota
+      dasbor, panel merek halaman Masuk, kepala panel Tulis). Token teks & status disetel
+      ulang di sini agar komponen biasa tetap terbaca di atas biru tua tanpa kelas khusus.
+      Menu tarik-turun di-portal ke body, jadi tetap memakai token biasa.
+    */
+    [data-sidebar='sidebar'],
+    .surface-navy {
+        color-scheme: dark;
+        --foreground: var(--sidebar-foreground);
+        --muted: var(--sidebar-accent);
+        --muted-foreground: var(--on-navy-muted);
+        --accent: var(--sidebar-accent);
+        --accent-foreground: var(--sidebar-accent-foreground);
+        --border: var(--sidebar-border);
+        --ring: var(--sidebar-ring);
+        --success: var(--on-navy-success);
+        --warning: var(--on-navy-warning);
+        --danger: var(--on-navy-danger);
+        --scrollbar-thumb: var(--sidebar-border);
+        --scrollbar-thumb-hover: var(--on-navy-muted);
+    }
+
+    .surface-navy {
+        background-color: var(--sidebar);
+        color: var(--sidebar-foreground);
+    }
+
+    /* Isi editor (Tiptap) — tipografi baca yang sama dengan panel baca email. */
+    .mail-prose {
+        font-size: 15px;
+        line-height: 1.65;
+        max-width: 72ch;
+        overflow-wrap: anywhere;
+    }
+
+    .mail-prose:focus {
+        outline: none;
+    }
+
+    .mail-prose p {
+        margin: 0 0 0.75em;
+    }
+
+    .mail-prose h2 {
+        font-size: 1.15em;
+        font-weight: 600;
+        margin: 1em 0 0.5em;
+    }
+
+    .mail-prose h3 {
+        font-size: 1.05em;
+        font-weight: 600;
+        margin: 1em 0 0.5em;
+    }
+
+    .mail-prose ul {
+        list-style: disc;
+        padding-left: 1.4em;
+        margin: 0 0 0.75em;
+    }
+
+    .mail-prose ol {
+        list-style: decimal;
+        padding-left: 1.4em;
+        margin: 0 0 0.75em;
+    }
+
+    .mail-prose a {
+        color: var(--primary);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+    }
+
+    .mail-prose blockquote {
+        border-left: 3px solid var(--border);
+        padding-left: 0.9em;
+        color: var(--muted-foreground);
+        margin: 0.75em 0;
+    }
+
+    .mail-prose [data-signature],
+    .mail-prose div[data-signature] {
+        color: var(--muted-foreground);
+    }
+
+    .mail-prose p.is-editor-empty:first-child::before {
+        content: attr(data-placeholder);
+        color: var(--muted-foreground);
+        float: left;
+        height: 0;
+        pointer-events: none;
+    }
+
+    /* Chip merge field {{nama}} di editor siaran. */
+    .mail-prose .merge-field {
+        @apply rounded bg-info-soft px-1 font-mono text-[0.85em] text-info;
+    }
+}

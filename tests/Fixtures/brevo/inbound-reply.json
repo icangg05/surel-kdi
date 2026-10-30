@@ -1,0 +1,40 @@
+{
+    "items": [
+        {
+            "Uuid": ["6c7c7c8a-0000-4000-8000-000000000001"],
+            "MessageId": "CAF=reply-001@mail.gmail.com",
+            "InReplyTo": null,
+            "From": { "Name": "Budi Santoso", "Address": "Budi@Example.com" },
+            "To": [
+                {
+                    "Name": "Dinas Kominfo",
+                    "Address": "kominfo@in.ilmifaizan.cloud"
+                }
+            ],
+            "Cc": [],
+            "Recipients": ["kominfo@in.ilmifaizan.cloud"],
+            "ReplyTo": null,
+            "SentAtDate": "Thu, 29 Oct 2026 10:00:00 +0800",
+            "Subject": "Re: Undangan rapat",
+            "RawHtmlBody": "<p>Siap, kami hadir.</p><script>alert(1)</script><img src=\"https://tracker.example/pixel.gif\" onerror=\"alert(2)\"><a href=\"javascript:alert(3)\">x</a>",
+            "RawTextBody": "Siap, kami hadir.",
+            "ExtractedMarkdownMessage": "Siap, kami hadir.",
+            "ExtractedMarkdownSignature": null,
+            "SpamScore": 0.8,
+            "Attachments": [
+                {
+                    "Name": "notulen.pdf",
+                    "ContentType": "application/pdf",
+                    "ContentLength": 1234,
+                    "ContentID": null,
+                    "DownloadToken": "tok-abc"
+                }
+            ],
+            "Headers": {
+                "Message-ID": "<CAF=reply-001@mail.gmail.com>",
+                "Received": ["from mail-a.google.com", "from mail-b.google.com"],
+                "References": ""
+            }
+        }
+    ]
+}

@@ -20,6 +20,12 @@ return Application::configure(basePath: dirname(__DIR__))
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Produksi di belakang nginx host (TLS) dan dev di belakang tunnel: tanpa ini
+        // URL aset jadi http:// di halaman https://, dan throttle login melihat semua
+        // pengguna sebagai satu IP. Aman di produksi: port app hanya terikat ke
+        // 127.0.0.1 (compose.prod.yml), jadi header X-Forwarded-* hanya dari nginx.
+        $middleware->trustProxies(at: '*');
+
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
         $middleware->alias(['admin' => EnsureUserIsAdmin::class]);

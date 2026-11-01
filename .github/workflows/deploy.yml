@@ -1,0 +1,92 @@
+name: Deploy ke VPS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+# Dua push beruntun tidak boleh menjalankan dua deploy sekaligus di server yang
+# sama; yang kedua menunggu, tidak membatalkan yang sedang berjalan.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          port: 22
+          command_timeout: 30m
+          script: |
+            set -e
+            cd /var/www/kdi-mail
+
+            # Semua perintah di bawah memakai compose produksi, bukan compose.yml
+            # (yang itu dev: bind mount kode, mysql terbuka ke :3310, servis vite).
+            export COMPOSE_FILE=compose.prod.yml
+            # Jangan cetak attestation/provenance manifest yang menumpuk di disk.
+            export BUILDX_NO_DEFAULT_ATTESTATIONS=1
+
+            echo "==> Sinkron kode dengan origin/main..."
+            # reset --hard, bukan pull: perbaikan darurat yang sempat diterapkan
+            # langsung di server tidak boleh membuat deploy macet karena konflik.
+            # Berkas untracked (.env, storage/app, storage/logs) tidak tersentuh.
+            git fetch --prune origin main
+            git reset --hard origin/main
+
+            # ── Build dulu, baru recreate ──
+            # Kontainer lama tetap MELAYANI selama build. Bila build gagal,
+            # `set -e` menghentikan skrip di sini dengan situs tetap HIDUP.
+            # composer install dan npm run build dikerjakan stage `build` di
+            # Dockerfile, jadi tidak ada langkah dependensi di sini.
+            echo "==> Build image..."
+            docker compose build
+
+            # Migrasi memakai image baru SEBELUM kontainer diganti: kode baru
+            # tidak pernah melayani request (atau job antrean) tanpa kolomnya.
+            # `run` tidak membuka port servis, dan menunggu mysql sehat dulu.
+            echo "==> Migrasi..."
+            docker compose run --rm -T app php artisan migrate --force
+
+            # Kode dibakar ke dalam image, jadi image baru = kontainer baru untuk
+            # app, queue, dan scheduler sekaligus. Tidak perlu queue:restart.
+            echo "==> Recreate kontainer..."
+            docker compose up -d --remove-orphans
+
+            # `optimize` = config + route + view + event cache. Dijalankan di sini,
+            # bukan saat build: .env baru terpasang ketika kontainer jalan.
+            echo "==> Cache..."
+            docker compose exec -T app php artisan optimize
+
+            echo "==> Tunggu aplikasi siap..."
+            # Alamat dibaca dari compose (APP_PORT di .env), bukan ditulis ulang di sini.
+            ADDR=$(docker compose port app 80)
+            for i in $(seq 1 30); do
+              if curl -fsS -o /dev/null "http://$ADDR/up"; then
+                echo "Aplikasi merespons di $ADDR."
+                break
+              fi
+              if [ "$i" = "30" ]; then
+                echo "Aplikasi tidak merespons setelah 60 detik." >&2
+                docker compose logs --tail=50 app queue >&2
+                exit 1
+              fi
+              sleep 2
+            done
+
+            echo "==> Bersihkan image lama..."
+            # Tiap deploy meninggalkan image dangling; di VPS kecil ini yang
+            # diam-diam menghabiskan disk.
+            docker image prune -f
+
+            docker compose ps
+            df -h /
+            echo "Done!"

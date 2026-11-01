@@ -1,0 +1,79 @@
+# Produksi. Kode, vendor/, dan aset dibakar ke dalam image (target `production`
+# di Dockerfile), tidak di-mount seperti compose.yml. Dari host hanya .env dan
+# storage/app (lampiran email) serta storage/logs yang dipasang.
+#
+#   COMPOSE_FILE=compose.prod.yml docker compose up -d --build
+#
+# Port hanya terikat ke 127.0.0.1: yang menghadap internet adalah nginx host
+# (TLS via certbot) yang mem-proxy ke sini. Webhook Brevo juga masuk lewat situ.
+#
+# Nama proyek sengaja beda dari dev: tanpa ini, menjalankan berkas ini di mesin
+# dev menimpa image `kdi-mail-app` dan memakai volume `kdi-mail_dbdata` milik dev.
+name: kdi-mail-prod
+
+x-app: &app
+  build:
+    context: .
+    target: production
+  volumes:
+    # .env tidak ikut ke dalam image (lihat .dockerignore) — dipasang dari host
+    # supaya kredensial tidak pernah ikut terbangun ke layer image.
+    - ./.env:/app/.env:ro
+    # Lampiran email masuk/keluar menempel ke disk host, bukan layer kontainer.
+    - ./storage/app:/app/storage/app
+    # Log tetap ada setelah redeploy; laravel.log yang dibaca saat email masuk gagal.
+    - ./storage/logs:/app/storage/logs
+  depends_on:
+    mysql:
+      condition: service_healthy
+  restart: unless-stopped
+
+services:
+  app:
+    <<: *app
+    ports:
+      - '127.0.0.1:${APP_PORT:-8011}:80'
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', 'http://127.0.0.1/up']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # Pekerja antrean: semua pengiriman, pemrosesan email masuk, dan unduhan
+  # lampiran Brevo. Matikan servis ini dan email berhenti berangkat.
+  queue:
+    <<: *app
+    command: php artisan queue:work --queue=default,broadcast --tries=5 --sleep=2 --max-time=3600
+    # SIGTERM saat redeploy: queue:work menuntaskan job yang sedang jalan dulu.
+    # Bawaan Docker 10 detik terlalu pendek untuk kiriman yang lambat ke Brevo.
+    stop_grace_period: 60s
+    healthcheck:
+      disable: true
+
+  # Penjadwal: melepas email/siaran terjadwal, sinkron akun Brevo, cek DNS.
+  scheduler:
+    <<: *app
+    command: php artisan schedule:work
+    healthcheck:
+      disable: true
+
+  mysql:
+    image: mysql:8.4
+    # Tanpa `ports`: database hanya dijangkau lewat jaringan compose.
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:?Isi DB_DATABASE di .env}
+      MYSQL_USER: ${DB_USERNAME:?Isi DB_USERNAME di .env}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Isi DB_PASSWORD di .env}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:?Isi DB_PASSWORD di .env}
+    volumes:
+      - dbdata:/var/lib/mysql
+    healthcheck:
+      test: ['CMD-SHELL', 'mysqladmin ping -h 127.0.0.1 -u root -p"$$MYSQL_ROOT_PASSWORD"']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+volumes:
+  dbdata:

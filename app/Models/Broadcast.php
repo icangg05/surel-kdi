@@ -20,7 +20,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int|null $template_id
  * @property string $subject
  * @property string $body_html
- * @property array{groups?: list<int>, contacts?: list<int>}|null $audience
+ * @property array{all?: bool, groups?: list<int>, contacts?: list<int>}|null $audience
  * @property BroadcastStatus $status
  * @property int $total
  * @property CarbonImmutable|null $scheduled_at
@@ -56,6 +56,12 @@ class Broadcast extends Model
         return $this->belongsTo(User::class, 'user_id');
     }
 
+    /** @return BelongsTo<Template, $this> */
+    public function template(): BelongsTo
+    {
+        return $this->belongsTo(Template::class);
+    }
+
     /** @return HasMany<Delivery, $this> */
     public function deliveries(): HasMany
     {
@@ -72,6 +78,17 @@ class Broadcast extends Model
     public function threads(): HasMany
     {
         return $this->hasMany(Thread::class);
+    }
+
+    /**
+     * Siaran bertemplat dikunci ke templatnya: subjek & isi selalu mengikuti
+     * versi terbaru, dan hanya diubah dari menu Templat. Belum disimpan.
+     */
+    public function fillFromTemplate(): void
+    {
+        if ($this->template_id && $template = $this->template) {
+            $this->forceFill(['subject' => $template->subject, 'body_html' => $template->body_html]);
+        }
     }
 
     public function isEditable(): bool

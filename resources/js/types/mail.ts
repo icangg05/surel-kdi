@@ -28,7 +28,7 @@ export type StatusValue = { value: string; label: string };
 
 export type ListRow = {
     key: string;
-    kind: 'thread' | 'draft' | 'outgoing';
+    kind: 'thread' | 'draft' | 'outgoing' | 'broadcast';
     id: number;
     thread_id?: number | null;
     subject: string;

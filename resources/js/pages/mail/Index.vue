@@ -25,7 +25,7 @@ import MessageCard from '@/components/mail/MessageCard.vue';
 import ThreadRow from '@/components/mail/ThreadRow.vue';
 import Pagination from '@/components/Pagination.vue';
 import { Button } from '@/components/ui/button';
-import { SidebarTrigger } from '@/components/ui/sidebar';
+import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
 import {
     Tooltip,
     TooltipContent,
@@ -52,6 +52,8 @@ const props = defineProps<{
 
 const page = usePage();
 const busy = useBusy();
+// Bilah judul ikut biru malam di layar kecil, sama seperti header halaman lain.
+const { isMobile } = useSidebar();
 const compose = useCompose();
 
 const TITLES: Record<string, string> = {
@@ -103,6 +105,11 @@ const listUrl = (extra: Record<string, unknown> = {}) =>
     );
 
 const rowHref = (row: ListRow) => {
+    // Siaran di Terkirim dibuka ke halaman detail siaran, bukan panel baca.
+    if (row.kind === 'broadcast') {
+        return broadcastRoutes.show.url(row.id);
+    }
+
     const threadId =
         row.kind === 'thread'
             ? row.id
@@ -132,6 +139,7 @@ const rowHref = (row: ListRow) => {
 
 const isActive = (row: ListRow) =>
     !!props.thread &&
+    row.kind !== 'broadcast' &&
     (row.kind === 'thread'
         ? row.id === props.thread.id
         : row.thread_id === props.thread.id);
@@ -230,6 +238,12 @@ function markRead(threadIds: number[], read: boolean) {
 
 function toggleStar(row: ListRow) {
     update(row.id, { starred: !row.starred });
+}
+
+function emptyTrash() {
+    router.delete(mailRoutes.emptyTrash.url(props.mailbox.id), {
+        preserveScroll: true,
+    });
 }
 
 function destroyThread() {
@@ -363,7 +377,12 @@ const unreadLabel = computed(() => {
             ]"
             aria-label="Daftar email"
         >
-            <div class="flex items-center gap-2 px-4 pt-3 pb-2">
+            <div
+                :class="[
+                    'flex items-center gap-2 px-4 pt-3 pb-2',
+                    isMobile ? 'surface-navy mb-3 pb-3' : '',
+                ]"
+            >
                 <SidebarTrigger class="-ml-1" />
                 <div class="min-w-0 flex-1">
                     <h1 class="truncate text-base font-semibold tracking-tight">
@@ -427,6 +446,29 @@ const unreadLabel = computed(() => {
                     >
                 </label>
             </form>
+
+            <div
+                v-if="folder === 'trash' && rows.total > 0 && !search"
+                class="flex items-center gap-3 border-t px-4 py-1.5 text-xs text-muted-foreground"
+            >
+                <p class="flex-1 text-pretty">
+                    Utas di Sampah dihapus permanen otomatis setelah 30 hari.
+                </p>
+                <ConfirmDialog
+                    title="Kosongkan Sampah?"
+                    :description="`Semua ${rows.total} utas di Sampah beserta lampirannya dihapus permanen dan tidak bisa dipulihkan.`"
+                    confirm-label="Kosongkan Sampah"
+                    destructive
+                    @confirm="emptyTrash"
+                >
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        class="h-7 shrink-0 text-destructive hover:text-destructive"
+                        ><Trash2 /> Kosongkan Sampah</Button
+                    >
+                </ConfirmDialog>
+            </div>
 
             <div
                 v-if="threadRows.length"

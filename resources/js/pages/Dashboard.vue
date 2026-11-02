@@ -134,7 +134,7 @@ const brevoCredits = computed(
                 >
                 <Button
                     variant="outline"
-                    @click="router.post(broadcastRoutes.store.url())"
+                    @click="router.visit(broadcastRoutes.create.url())"
                     ><Megaphone /> Siaran baru</Button
                 >
             </div>

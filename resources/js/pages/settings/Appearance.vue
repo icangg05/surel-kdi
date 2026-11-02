@@ -25,7 +25,7 @@ defineOptions({
         <Heading
             variant="small"
             title="Tampilan"
-            description="Pilih mode terang, gelap, atau ikuti sistem."
+            description="Tampilan bawaan terang. Pilih Gelap bila lebih nyaman."
         />
         <AppearanceTabs />
     </div>

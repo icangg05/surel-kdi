@@ -6,6 +6,13 @@ import PageHeader from '@/components/PageHeader.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { dateOnly, number } from '@/lib/format';
 import admin from '@/routes/admin';
@@ -105,15 +112,20 @@ const reset = computed(() =>
                 </div>
                 <div class="grid gap-1.5">
                     <Label for="s-tz">Zona waktu reset kuota</Label>
-                    <select
-                        id="s-tz"
-                        v-model="form.quota_timezone"
-                        class="h-9 rounded-md border bg-background px-3 text-sm"
-                    >
-                        <option v-for="tz in timezones" :key="tz" :value="tz">
-                            {{ tz }}
-                        </option>
-                    </select>
+                    <Select v-model="form.quota_timezone">
+                        <SelectTrigger id="s-tz" class="w-full">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem
+                                v-for="tz in timezones"
+                                :key="tz"
+                                :value="tz"
+                            >
+                                {{ tz }}
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
                     <p class="text-xs text-muted-foreground">
                         Ikuti zona waktu reset kuota akun Brevo Anda.
                     </p>

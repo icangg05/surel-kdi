@@ -90,4 +90,11 @@ class Thread extends Model
             'last_message_at' => $messages->map(fn (Message $m) => $m->received_at ?? $m->sent_at ?? $m->created_at)->max(),
         ])->save();
     }
+
+    /** Hapus permanen. Lampiran dihapus lewat model supaya berkasnya ikut hilang dari disk. */
+    public function purge(): void
+    {
+        Attachment::query()->whereIn('message_id', $this->messages()->select('id'))->get()->each->delete();
+        $this->delete();
+    }
 }

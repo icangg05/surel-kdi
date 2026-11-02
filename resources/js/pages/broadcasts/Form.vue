@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, router, usePage } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { useDebounceFn } from '@vueuse/core';
 import {
     AlertTriangle,
@@ -8,10 +8,11 @@ import {
     ChevronRight,
     Clock,
     Loader2,
+    Lock,
+    Search,
     Send,
     Trash2,
     Users,
-    X,
 } from '@lucide/vue';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
@@ -21,10 +22,17 @@ import RichEditor from '@/components/mail/RichEditor.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { dateOnly, groupDot, number } from '@/lib/format';
 import { json } from '@/lib/http';
 import broadcastRoutes from '@/routes/broadcasts';
-import { search as searchRecipients } from '@/routes/recipients';
+import templateRoutes from '@/routes/templates';
 import type { AttachmentItem, GroupItem, MailboxSummary } from '@/types';
 
 type ContactLite = {
@@ -33,6 +41,14 @@ type ContactLite = {
     email: string;
     organization?: string | null;
     position?: string | null;
+};
+type ContactOption = {
+    id: number;
+    name: string;
+    email: string;
+    organization: string | null;
+    sendable: boolean;
+    groups: number[];
 };
 type Estimate = {
     total: number;
@@ -46,17 +62,21 @@ type Estimate = {
 
 const props = defineProps<{
     broadcast: {
-        id: number;
+        /** null = siaran baru yang belum disimpan (masih di langkah Penerima). */
+        id: number | null;
         mailbox_id: number;
+        template_id: number | null;
         subject: string;
         body_html: string;
         status: string;
         scheduled_at: string | null;
+        all: boolean;
         groups: number[];
-        contacts: ContactLite[];
+        contacts: number[];
         attachments: AttachmentItem[];
     };
     groups: (GroupItem & { contacts_count: number; sendable_count: number })[];
+    contacts: ContactOption[];
     templates: {
         id: number;
         name: string;
@@ -65,6 +85,7 @@ const props = defineProps<{
     }[];
     mailboxes: MailboxSummary[];
     mergeFields: Record<string, string>;
+    step: number;
 }>();
 
 defineOptions({
@@ -76,17 +97,22 @@ defineOptions({
     },
 });
 
+const DEFAULT_BODY = '<p>Yth. {{nama}},</p><p></p>';
 const page = usePage();
 const STEPS = ['Penerima', 'Isi', 'Pratinjau', 'Kirim'];
-const step = ref(0);
+const step = ref(props.step);
+const isNew = computed(() => props.broadcast.id === null);
+// Langkah setelah Penerima hanya terbuka bila draf sudah ada, jadi id pasti terisi.
+const broadcastId = () => props.broadcast.id as number;
 const form = reactive({
     mailbox_id: props.broadcast.mailbox_id,
+    template_id: props.broadcast.template_id,
     subject: props.broadcast.subject,
     body_html: props.broadcast.body_html,
+    all: props.broadcast.all,
     groups: [...props.broadcast.groups],
-    contacts: props.broadcast.contacts.map((c) => c.id),
+    contacts: [...props.broadcast.contacts],
 });
-const pickedContacts = ref<ContactLite[]>([...props.broadcast.contacts]);
 const attachments = ref<AttachmentItem[]>(props.broadcast.attachments);
 const estimate = ref<Estimate | null>(null);
 const savedAt = ref<string | null>(null);
@@ -99,12 +125,17 @@ const scheduleAt = ref(
         : '',
 );
 const launching = ref(false);
+const creating = ref(false);
 
 async function save() {
+    if (isNew.value) {
+        return;
+    }
+
     try {
         const res = await json<{ saved_at: string }>(
             'PUT',
-            broadcastRoutes.update.url(props.broadcast.id),
+            broadcastRoutes.update.url(broadcastId()),
             form,
         );
         savedAt.value = res.saved_at;
@@ -113,14 +144,16 @@ async function save() {
     }
 }
 
+// Siaran baru belum punya draf; tidak ada yang disimpan sebelum operator lanjut.
 const autosave = useDebounceFn(save, 1200);
-watch(form, autosave, { deep: true });
+watch(form, () => !isNew.value && autosave(), { deep: true });
 
 const refreshEstimate = useDebounceFn(async () => {
     estimate.value = await json<Estimate>(
         'POST',
-        broadcastRoutes.estimate.url(props.broadcast.id),
+        broadcastRoutes.estimate.url(),
         {
+            all: form.all,
             groups: form.groups,
             contacts: form.contacts,
             scheduled_at:
@@ -131,71 +164,95 @@ const refreshEstimate = useDebounceFn(async () => {
     );
 }, 250);
 watch(
-    () => [form.groups, form.contacts, mode.value, scheduleAt.value],
+    () => [form.all, form.groups, form.contacts, mode.value, scheduleAt.value],
     refreshEstimate,
     { deep: true },
 );
 onMounted(refreshEstimate);
 
+// Penerima
 function toggleGroup(id: number) {
     form.groups = form.groups.includes(id)
         ? form.groups.filter((g) => g !== id)
         : [...form.groups, id];
 }
 
-// Pencarian kontak tambahan (di luar grup).
-const contactQuery = ref('');
-const contactHits = ref<ContactLite[]>([]);
-const searchContacts = useDebounceFn(async () => {
-    if (contactQuery.value.trim().length < 2) {
-        contactHits.value = [];
+const sendableTotal = computed(
+    () => props.contacts.filter((c) => c.sendable).length,
+);
+const contactFilter = ref('');
+const filteredContacts = computed(() => {
+    const q = contactFilter.value.trim().toLowerCase();
 
-        return;
-    }
+    return q
+        ? props.contacts.filter((c) =>
+              [c.name, c.email, c.organization ?? ''].some((v) =>
+                  v.toLowerCase().includes(q),
+              ),
+          )
+        : props.contacts;
+});
+const viaGroup = (c: ContactOption) =>
+    c.groups.some((g) => form.groups.includes(g));
+const isPicked = (c: ContactOption) =>
+    c.sendable && (viaGroup(c) || form.contacts.includes(c.id));
 
-    const res = await json<{
-        contacts: (ContactLite & { suppressed: boolean })[];
-    }>('GET', searchRecipients.url({ query: { q: contactQuery.value } }));
-    contactHits.value = res.contacts.filter(
-        (c) => !form.contacts.includes(c.id),
-    );
-}, 200);
-watch(contactQuery, searchContacts);
-
-function addContact(c: ContactLite) {
-    form.contacts = [...form.contacts, c.id];
-    pickedContacts.value = [...pickedContacts.value, c];
-    contactQuery.value = '';
-    contactHits.value = [];
+function toggleContact(id: number) {
+    form.contacts = form.contacts.includes(id)
+        ? form.contacts.filter((x) => x !== id)
+        : [...form.contacts, id];
 }
 
-function removeContact(id: number) {
-    form.contacts = form.contacts.filter((x) => x !== id);
-    pickedContacts.value = pickedContacts.value.filter((c) => c.id !== id);
+// "Pilih semua" di daftar berlaku untuk kontak yang sedang tampil (hasil saringan).
+const pickableVisible = computed(() =>
+    filteredContacts.value.filter((c) => c.sendable && !viaGroup(c)),
+);
+const allVisiblePicked = computed(
+    () =>
+        pickableVisible.value.length > 0 &&
+        pickableVisible.value.every((c) => form.contacts.includes(c.id)),
+);
+
+function toggleVisible() {
+    const ids = pickableVisible.value.map((c) => c.id);
+
+    form.contacts = allVisiblePicked.value
+        ? form.contacts.filter((id) => !ids.includes(id))
+        : [...new Set([...form.contacts, ...ids])];
 }
 
-// Templat
-function applyTemplate(e: Event) {
-    const id = Number((e.target as HTMLSelectElement).value);
-    (e.target as HTMLSelectElement).value = '';
+// Templat: siaran bertemplat terkunci, subjek & isi hanya diubah dari menu Templat.
+const template = computed(
+    () => props.templates.find((t) => t.id === form.template_id) ?? null,
+);
 
-    if (!id) {
+function chooseTemplate(value: unknown) {
+    const next = props.templates.find((t) => t.id === Number(value)) ?? null;
+
+    if ((next?.id ?? null) === form.template_id) {
         return;
     }
 
-    if (
-        form.body_html.replace(/<[^>]+>/g, '').trim().length > 20 &&
-        !confirm('Ganti isi saat ini dengan templat?')
-    ) {
+    if (!next) {
+        form.template_id = null;
+        form.subject = '';
+        form.body_html = DEFAULT_BODY;
+
         return;
     }
 
-    const template = props.templates.find((t) => t.id === id);
+    const written =
+        !template.value &&
+        (form.subject.trim() !== '' ||
+            form.body_html.replace(/<[^>]+>/g, '').trim().length > 20);
 
-    if (template) {
-        form.subject = template.subject;
-        form.body_html = template.body_html;
+    if (written && !confirm('Ganti subjek dan isi saat ini dengan templat?')) {
+        return;
     }
+
+    form.template_id = next.id;
+    form.subject = next.subject;
+    form.body_html = next.body_html;
 }
 
 // Pratinjau
@@ -205,7 +262,7 @@ const preview = ref<{ subject: string; html: string } | null>(null);
 async function loadPreview() {
     preview.value = await json(
         'POST',
-        broadcastRoutes.preview.url(props.broadcast.id),
+        broadcastRoutes.preview.url(broadcastId()),
         {
             contact_id: previewContact.value,
             subject: form.subject,
@@ -214,12 +271,16 @@ async function loadPreview() {
     );
 }
 
-watch(step, (s) => {
-    if (s === 2) {
-        previewContact.value ??= estimate.value?.sample[0]?.id ?? null;
-        loadPreview();
-    }
-});
+watch(
+    step,
+    (s) => {
+        if (s === 2) {
+            previewContact.value ??= estimate.value?.sample[0]?.id ?? null;
+            loadPreview();
+        }
+    },
+    { immediate: props.step === 2 },
+);
 watch(previewContact, () => step.value === 2 && loadPreview());
 
 const previewDoc = computed(() =>
@@ -235,7 +296,7 @@ async function sendTest() {
     testing.value = true;
     await save();
     router.post(
-        broadcastRoutes.test.url(props.broadcast.id),
+        broadcastRoutes.test.url(broadcastId()),
         { email: testEmail.value },
         {
             preserveScroll: true,
@@ -273,11 +334,47 @@ const canNext = computed(() =>
           : true,
 );
 
+// Siaran baru: draf dibuat di sini, lalu server membuka langkah Isi.
+function next() {
+    if (!isNew.value) {
+        step.value++;
+
+        return;
+    }
+
+    router.post(
+        broadcastRoutes.store.url(),
+        {
+            mailbox_id: form.mailbox_id,
+            template_id: form.template_id,
+            all: form.all,
+            groups: form.groups,
+            contacts: form.contacts,
+        },
+        {
+            onStart: () => (creating.value = true),
+            onFinish: () => (creating.value = false),
+            onError: (e) =>
+                toast.error(Object.values(e)[0] ?? 'Gagal membuat draf'),
+        },
+    );
+}
+
+function goTo(i: number) {
+    if (i <= step.value) {
+        step.value = i;
+    } else if (canNext.value && isNew.value) {
+        next();
+    } else if (canNext.value) {
+        step.value = i;
+    }
+}
+
 async function launch() {
     launching.value = true;
     await save();
     router.post(
-        broadcastRoutes.launch.url(props.broadcast.id),
+        broadcastRoutes.launch.url(broadcastId()),
         {
             scheduled_at:
                 mode.value === 'later' && scheduleAt.value
@@ -293,7 +390,7 @@ async function launch() {
 }
 
 function discard() {
-    router.delete(broadcastRoutes.destroy.url(props.broadcast.id));
+    router.delete(broadcastRoutes.destroy.url(broadcastId()));
 }
 
 const days = computed(() => estimate.value?.forecast.length ?? 0);
@@ -304,19 +401,37 @@ const days = computed(() => estimate.value?.forecast.length ?? 0);
 
     <div class="mx-auto w-full max-w-6xl p-4 sm:p-6">
         <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
-            <div>
-                <h1 class="text-xl font-semibold tracking-tight">
+            <div class="min-w-0">
+                <h1 class="truncate text-xl font-semibold tracking-tight">
                     {{ form.subject || 'Siaran baru' }}
                 </h1>
                 <p class="text-xs text-muted-foreground">
-                    {{
-                        savedAt
-                            ? `Draf tersimpan otomatis ${new Date(savedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`
-                            : 'Draf tersimpan otomatis'
-                    }}
+                    <template v-if="isNew"
+                        >Belum disimpan. Draf dibuat setelah Anda lanjut ke
+                        langkah Isi.</template
+                    >
+                    <template v-else-if="savedAt"
+                        >Draf tersimpan otomatis
+                        {{
+                            new Date(savedAt).toLocaleTimeString('id-ID', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                            })
+                        }}</template
+                    >
+                    <template v-else>Draf tersimpan otomatis</template>
                 </p>
             </div>
+            <Button
+                v-if="isNew"
+                variant="ghost"
+                size="sm"
+                class="text-muted-foreground"
+                as-child
+                ><Link :href="broadcastRoutes.index()">Batal</Link></Button
+            >
             <ConfirmDialog
+                v-else
                 title="Buang draf siaran ini?"
                 confirm-label="Buang"
                 destructive
@@ -338,7 +453,7 @@ const days = computed(() => estimate.value?.forecast.length ?? 0);
                         'flex w-full flex-col gap-2 text-left',
                         i > step && !canNext ? 'cursor-default' : '',
                     ]"
-                    @click="i <= step || canNext ? (step = i) : null"
+                    @click="goTo(i)"
                 >
                     <span
                         :class="[
@@ -378,186 +493,324 @@ const days = computed(() => estimate.value?.forecast.length ?? 0);
         <div class="grid gap-6 lg:grid-cols-[1fr_300px]">
             <div class="min-w-0">
                 <!-- 1. Penerima -->
-                <section v-show="step === 0" class="space-y-5">
-                    <div>
-                        <h2 class="font-semibold">Pilih grup</h2>
-                        <p class="text-sm text-muted-foreground">
-                            Kontak yang ada di beberapa grup tetap hanya
-                            dikirimi sekali.
-                        </p>
-                        <div class="mt-3 grid gap-2 sm:grid-cols-2">
-                            <button
-                                v-for="g in groups"
-                                :key="g.id"
-                                type="button"
-                                :aria-pressed="form.groups.includes(g.id)"
-                                :class="[
-                                    'flex items-center gap-3 rounded-lg border px-3.5 py-3 text-left transition-colors',
-                                    form.groups.includes(g.id)
-                                        ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                                        : 'hover:bg-muted/50',
-                                ]"
-                                @click="toggleGroup(g.id)"
-                            >
-                                <span
-                                    :class="[
-                                        'flex size-5 shrink-0 items-center justify-center rounded border',
-                                        form.groups.includes(g.id)
-                                            ? 'border-primary bg-primary text-primary-foreground'
-                                            : '',
-                                    ]"
-                                >
-                                    <Check
-                                        v-if="form.groups.includes(g.id)"
-                                        class="size-3.5"
-                                    />
-                                </span>
-                                <span class="min-w-0 flex-1">
-                                    <span
-                                        class="flex items-center gap-2 font-medium"
-                                        ><span
-                                            :class="[
-                                                'size-2 rounded-full',
-                                                groupDot(g.color),
-                                            ]"
-                                        />{{ g.name }}</span
-                                    >
-                                    <span
-                                        class="tabular text-xs text-muted-foreground"
-                                        >{{
-                                            number(g.sendable_count)
-                                        }}
-                                        aktif<template
-                                            v-if="
-                                                g.contacts_count >
-                                                g.sendable_count
-                                            "
-                                        >
-                                            ·
-                                            {{
-                                                g.contacts_count -
-                                                g.sendable_count
-                                            }}
-                                            dilewati</template
-                                        ></span
-                                    >
-                                </span>
-                            </button>
-                        </div>
-                        <p
-                            v-if="!groups.length"
-                            class="mt-3 text-sm text-muted-foreground"
+                <section v-show="step === 0" class="space-y-4">
+                    <button
+                        type="button"
+                        :aria-pressed="form.all"
+                        :class="[
+                            'flex w-full items-center gap-3 rounded-xl border bg-card px-4 py-3.5 text-left transition-colors',
+                            form.all
+                                ? 'border-primary ring-1 ring-primary'
+                                : 'hover:bg-muted/40',
+                        ]"
+                        @click="form.all = !form.all"
+                    >
+                        <span
+                            :class="[
+                                'flex size-5 shrink-0 items-center justify-center rounded border',
+                                form.all
+                                    ? 'border-primary bg-primary text-primary-foreground'
+                                    : '',
+                            ]"
                         >
-                            Belum ada grup. Buat grup di halaman Kontak & Grup.
-                        </p>
-                    </div>
+                            <Check v-if="form.all" class="size-3.5" />
+                        </span>
+                        <span class="min-w-0 flex-1">
+                            <span class="block font-medium"
+                                >Pilih semua kontak</span
+                            >
+                            <span class="block text-sm text-muted-foreground"
+                                >Kirim ke seluruh
+                                {{ number(sendableTotal) }} kontak aktif tanpa
+                                memilih satu per satu.</span
+                            >
+                        </span>
+                    </button>
 
-                    <div>
-                        <h2 class="font-semibold">
-                            Tambah kontak satu per satu
-                        </h2>
-                        <div class="relative mt-3">
-                            <Input
-                                v-model="contactQuery"
-                                placeholder="Cari nama, email, atau instansi"
-                            />
+                    <template v-if="!form.all">
+                        <div class="rounded-xl border bg-card">
+                            <div class="border-b px-4 py-3">
+                                <h2 class="font-semibold">Grup</h2>
+                                <p class="text-sm text-muted-foreground">
+                                    Kontak yang ada di beberapa grup tetap hanya
+                                    dikirimi sekali.
+                                </p>
+                            </div>
                             <div
-                                v-if="contactHits.length"
-                                class="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border bg-popover p-1 shadow-lg"
+                                v-if="groups.length"
+                                class="grid gap-2 p-4 sm:grid-cols-2"
                             >
                                 <button
-                                    v-for="c in contactHits"
-                                    :key="c.id"
+                                    v-for="g in groups"
+                                    :key="g.id"
                                     type="button"
-                                    class="flex w-full flex-col rounded-md px-3 py-2 text-left text-sm hover:bg-accent"
-                                    @click="addContact(c)"
+                                    :aria-pressed="form.groups.includes(g.id)"
+                                    :class="[
+                                        'flex items-center gap-3 rounded-lg border px-3.5 py-3 text-left transition-colors',
+                                        form.groups.includes(g.id)
+                                            ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                                            : 'hover:bg-muted/50',
+                                    ]"
+                                    @click="toggleGroup(g.id)"
                                 >
-                                    <span class="font-medium">{{
-                                        c.name
-                                    }}</span>
                                     <span
-                                        class="text-xs text-muted-foreground"
-                                        >{{ c.email }}</span
+                                        :class="[
+                                            'flex size-5 shrink-0 items-center justify-center rounded border',
+                                            form.groups.includes(g.id)
+                                                ? 'border-primary bg-primary text-primary-foreground'
+                                                : '',
+                                        ]"
                                     >
+                                        <Check
+                                            v-if="form.groups.includes(g.id)"
+                                            class="size-3.5"
+                                        />
+                                    </span>
+                                    <span class="min-w-0 flex-1">
+                                        <span
+                                            class="flex items-center gap-2 font-medium"
+                                            ><span
+                                                :class="[
+                                                    'size-2 shrink-0 rounded-full',
+                                                    groupDot(g.color),
+                                                ]"
+                                            /><span class="truncate">{{
+                                                g.name
+                                            }}</span></span
+                                        >
+                                        <span
+                                            class="tabular text-xs text-muted-foreground"
+                                            >{{
+                                                number(g.sendable_count)
+                                            }}
+                                            aktif<template
+                                                v-if="
+                                                    g.contacts_count >
+                                                    g.sendable_count
+                                                "
+                                            >
+                                                ·
+                                                {{
+                                                    g.contacts_count -
+                                                    g.sendable_count
+                                                }}
+                                                dilewati</template
+                                            ></span
+                                        >
+                                    </span>
                                 </button>
                             </div>
+                            <p v-else class="p-4 text-sm text-muted-foreground">
+                                Belum ada grup. Buat grup di halaman Kontak &
+                                Grup.
+                            </p>
                         </div>
-                        <div
-                            v-if="pickedContacts.length"
-                            class="mt-3 flex flex-wrap gap-1.5"
-                        >
-                            <span
-                                v-for="c in pickedContacts"
-                                :key="c.id"
-                                class="inline-flex items-center gap-1 rounded bg-secondary py-0.5 pr-1 pl-2.5 text-[13px]"
+
+                        <div class="overflow-hidden rounded-xl border bg-card">
+                            <div
+                                class="flex flex-wrap items-center gap-3 border-b px-4 py-3"
                             >
-                                {{ c.name }}
-                                <button
-                                    type="button"
-                                    class="rounded-sm p-0.5 hover:bg-foreground/10"
-                                    :aria-label="`Hapus ${c.name}`"
-                                    @click="removeContact(c.id)"
+                                <div class="min-w-0 flex-1">
+                                    <h2 class="font-semibold">Kontak</h2>
+                                    <p class="text-sm text-muted-foreground">
+                                        Centang nama untuk menambah penerima di
+                                        luar grup.
+                                    </p>
+                                </div>
+                                <label class="relative w-full sm:w-64">
+                                    <span class="sr-only">Saring kontak</span>
+                                    <Search
+                                        class="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+                                    />
+                                    <Input
+                                        v-model="contactFilter"
+                                        type="search"
+                                        placeholder="Saring nama, email, instansi"
+                                        class="pl-9"
+                                    />
+                                </label>
+                            </div>
+                            <label
+                                v-if="pickableVisible.length"
+                                class="flex cursor-pointer items-center gap-3 border-b bg-muted/30 px-4 py-2 text-sm"
+                            >
+                                <input
+                                    type="checkbox"
+                                    :checked="allVisiblePicked"
+                                    class="size-4 rounded accent-[var(--primary)]"
+                                    @change="toggleVisible"
+                                />
+                                <span class="flex-1 font-medium"
+                                    >Pilih semua
+                                    {{
+                                        contactFilter.trim()
+                                            ? 'hasil saringan'
+                                            : 'kontak'
+                                    }}
+                                    ({{ number(pickableVisible.length) }})</span
                                 >
-                                    <X class="size-3" />
-                                </button>
-                            </span>
+                                <span
+                                    class="tabular text-xs text-muted-foreground"
+                                    >{{
+                                        number(form.contacts.length)
+                                    }}
+                                    dipilih</span
+                                >
+                            </label>
+                            <ul
+                                v-if="filteredContacts.length"
+                                class="max-h-96 divide-y overflow-y-auto"
+                            >
+                                <li v-for="c in filteredContacts" :key="c.id">
+                                    <label
+                                        :class="[
+                                            'flex items-center gap-3 px-4 py-2.5',
+                                            c.sendable && !viaGroup(c)
+                                                ? 'cursor-pointer hover:bg-muted/40'
+                                                : 'opacity-70',
+                                        ]"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            :checked="isPicked(c)"
+                                            :disabled="
+                                                !c.sendable || viaGroup(c)
+                                            "
+                                            class="size-4 shrink-0 rounded accent-[var(--primary)]"
+                                            @change="toggleContact(c.id)"
+                                        />
+                                        <span class="min-w-0 flex-1">
+                                            <span
+                                                class="block truncate text-sm font-medium"
+                                                >{{ c.name }}</span
+                                            >
+                                            <span
+                                                class="block truncate text-xs text-muted-foreground"
+                                                >{{
+                                                    c.organization
+                                                        ? `${c.organization} · ${c.email}`
+                                                        : c.email
+                                                }}</span
+                                            >
+                                        </span>
+                                        <span
+                                            v-if="!c.sendable"
+                                            class="shrink-0 text-xs text-warning"
+                                            >Dilewati</span
+                                        >
+                                        <span
+                                            v-else-if="viaGroup(c)"
+                                            class="shrink-0 text-xs text-muted-foreground"
+                                            >Lewat grup</span
+                                        >
+                                    </label>
+                                </li>
+                            </ul>
+                            <p v-else class="p-4 text-sm text-muted-foreground">
+                                {{
+                                    contacts.length
+                                        ? 'Tidak ada kontak yang cocok.'
+                                        : 'Belum ada kontak. Tambahkan di halaman Kontak & Grup.'
+                                }}
+                            </p>
                         </div>
-                    </div>
+                    </template>
                 </section>
 
                 <!-- 2. Isi -->
-                <section v-show="step === 1" class="space-y-4">
-                    <div class="grid gap-4 sm:grid-cols-2">
-                        <div class="grid gap-1.5">
-                            <Label for="b-from">Dikirim dari</Label>
-                            <select
-                                id="b-from"
-                                v-model.number="form.mailbox_id"
-                                class="h-9 rounded-md border bg-background px-3 text-sm"
-                            >
-                                <option
-                                    v-for="m in mailboxes"
-                                    :key="m.id"
-                                    :value="m.id"
-                                >
-                                    {{ m.name }} &lt;{{ m.address }}&gt;
-                                </option>
-                            </select>
-                        </div>
-                        <div class="grid gap-1.5">
-                            <Label for="b-template">Mulai dari templat</Label>
-                            <select
-                                id="b-template"
-                                class="h-9 rounded-md border bg-background px-3 text-sm"
-                                @change="applyTemplate"
-                            >
-                                <option value="">Pilih templat</option>
-                                <option
-                                    v-for="t in templates"
-                                    :key="t.id"
-                                    :value="t.id"
-                                >
-                                    {{ t.name }}
-                                </option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="grid gap-1.5">
-                        <Label for="b-subject">Subjek</Label>
-                        <Input
-                            id="b-subject"
-                            v-model="form.subject"
-                            placeholder="mis. Undangan Rapat Koordinasi Website OPD"
-                            class="text-[15px]"
-                        />
-                    </div>
+                <section v-show="step === 1" class="space-y-3">
                     <div class="overflow-hidden rounded-xl border bg-card">
+                        <div class="grid gap-4 border-b p-4 sm:grid-cols-2">
+                            <div class="grid min-w-0 gap-1.5">
+                                <Label for="b-from">Dikirim dari</Label>
+                                <Select v-model="form.mailbox_id">
+                                    <SelectTrigger id="b-from" class="w-full">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem
+                                            v-for="m in mailboxes"
+                                            :key="m.id"
+                                            :value="m.id"
+                                        >
+                                            {{ m.name }} &lt;{{ m.address }}&gt;
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div class="grid min-w-0 gap-1.5">
+                                <Label for="b-template">Templat</Label>
+                                <Select
+                                    :model-value="form.template_id ?? 0"
+                                    :disabled="!templates.length"
+                                    @update:model-value="chooseTemplate"
+                                >
+                                    <SelectTrigger
+                                        id="b-template"
+                                        class="w-full"
+                                    >
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem :value="0">
+                                            {{
+                                                templates.length
+                                                    ? 'Tanpa templat (tulis sendiri)'
+                                                    : 'Belum ada templat'
+                                            }}
+                                        </SelectItem>
+                                        <SelectItem
+                                            v-for="t in templates"
+                                            :key="t.id"
+                                            :value="t.id"
+                                        >
+                                            {{ t.name }}
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                        <div
+                            v-if="template"
+                            class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b bg-info-soft px-4 py-2.5 text-sm text-info"
+                        >
+                            <Lock class="size-4 shrink-0" />
+                            <p class="min-w-0 flex-1">
+                                Subjek dan isi mengikuti templat
+                                <strong class="font-semibold">{{
+                                    template.name
+                                }}</strong>
+                                dan hanya bisa diubah dari menu Templat.
+                            </p>
+                            <Link
+                                :href="templateRoutes.edit.url(template.id)"
+                                class="font-medium underline underline-offset-2"
+                                >Ubah templat</Link
+                            >
+                        </div>
+                        <div class="grid gap-1.5 border-b p-4">
+                            <Label for="b-subject">Subjek</Label>
+                            <Input
+                                id="b-subject"
+                                v-model="form.subject"
+                                :readonly="!!template"
+                                placeholder="mis. Undangan Rapat Koordinasi Website OPD"
+                                :class="[
+                                    'text-[15px]',
+                                    template ? 'bg-muted/50' : '',
+                                ]"
+                            />
+                        </div>
                         <RichEditor
                             v-model="form.body_html"
                             :merge-fields="mergeFields"
+                            :readonly="!!template"
                             min-height="320px"
                         />
-                        <div class="border-t px-4 py-2.5">
+                        <div
+                            v-if="broadcast.id !== null"
+                            class="border-t px-4 py-2.5"
+                        >
                             <AttachmentPicker
                                 v-model="attachments"
                                 :broadcast-id="broadcast.id"
@@ -583,21 +836,22 @@ const days = computed(() => estimate.value?.forecast.length ?? 0);
                     <div class="flex flex-wrap items-end gap-3">
                         <div class="grid min-w-56 flex-1 gap-1.5">
                             <Label for="b-sample">Lihat sebagai</Label>
-                            <select
-                                id="b-sample"
-                                v-model="previewContact"
-                                class="h-9 rounded-md border bg-background px-3 text-sm"
-                            >
-                                <option
-                                    v-for="c in estimate?.sample ?? []"
-                                    :key="c.id"
-                                    :value="c.id"
-                                >
-                                    {{ c.name }} ({{
-                                        c.organization || c.email
-                                    }})
-                                </option>
-                            </select>
+                            <Select v-model="previewContact">
+                                <SelectTrigger id="b-sample" class="w-full">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem
+                                        v-for="c in estimate?.sample ?? []"
+                                        :key="c.id"
+                                        :value="c.id"
+                                    >
+                                        {{ c.name }} ({{
+                                            c.organization || c.email
+                                        }})
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
                     </div>
                     <div class="overflow-hidden rounded-xl border bg-card">
@@ -752,8 +1006,14 @@ const days = computed(() => estimate.value?.forecast.length ?? 0);
                         ><ChevronLeft /> Kembali</Button
                     >
                     <span v-else />
-                    <Button v-if="step < 3" :disabled="!canNext" @click="step++"
-                        >Lanjut: {{ STEPS[step + 1] }} <ChevronRight
+                    <Button
+                        v-if="step < 3"
+                        :disabled="!canNext || creating"
+                        @click="next"
+                        >Lanjut: {{ STEPS[step + 1] }}
+                        <Loader2
+                            v-if="creating"
+                            class="animate-spin" /><ChevronRight v-else
                     /></Button>
                     <ConfirmDialog
                         v-else

@@ -34,6 +34,8 @@ const props = withDefaults(
         placeholder?: string;
         mergeFields?: Record<string, string>;
         minHeight?: string;
+        /** Hanya tampil: toolbar disembunyikan dan isi tidak bisa diubah. */
+        readonly?: boolean;
         class?: string;
     }>(),
     { placeholder: 'Tulis pesan…', minHeight: '220px' },
@@ -41,6 +43,7 @@ const props = withDefaults(
 
 const editor = useEditor({
     content: model.value,
+    editable: !props.readonly,
     extensions: [
         StarterKit.configure({
             heading: { levels: [2, 3] },
@@ -70,6 +73,11 @@ watch(model, (value) => {
         editor.value.commands.setContent(value, { emitUpdate: false });
     }
 });
+
+watch(
+    () => props.readonly,
+    (readonly) => editor.value?.setEditable(!readonly),
+);
 
 onBeforeUnmount(() => editor.value?.destroy());
 
@@ -189,6 +197,7 @@ const tools: (Tool | 'sep')[] = [
 <template>
     <div :class="cn('flex min-h-0 flex-col', props.class)">
         <div
+            v-if="!readonly"
             class="flex flex-wrap items-center gap-0.5 border-b px-2 py-1"
             role="toolbar"
             aria-label="Format teks"

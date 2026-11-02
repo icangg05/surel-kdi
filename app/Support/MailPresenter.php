@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Enums\MessageStatus;
 use App\Models\Attachment;
+use App\Models\Broadcast;
 use App\Models\Delivery;
 use App\Models\Message;
 use App\Models\Thread;
@@ -59,6 +60,32 @@ class MailPresenter
             'broadcast' => false,
             'status' => ['value' => $message->status->value, 'label' => $message->status->label()],
             'error' => $message->error,
+        ];
+    }
+
+    /**
+     * Baris folder Terkirim untuk satu siaran: satu baris, bukan satu per penerima.
+     * Dibuka ke halaman detail siaran.
+     *
+     * @return array<string, mixed>
+     */
+    public static function broadcastRow(Broadcast $broadcast): array
+    {
+        return [
+            'key' => 'b'.$broadcast->id,
+            'kind' => 'broadcast',
+            'id' => $broadcast->id,
+            'subject' => $broadcast->subject ?: '(tanpa subjek)',
+            'snippet' => MailHtml::snippet(MailHtml::toText($broadcast->body_html)),
+            'participants' => 'Siaran ke '.number_format($broadcast->total, 0, ',', '.').' penerima',
+            'date' => $broadcast->started_at?->toIso8601String(),
+            'unread' => false,
+            'starred' => false,
+            'has_attachments' => ($broadcast->attachments_count ?? 0) > 0,
+            'count' => 0,
+            'folder' => null,
+            'broadcast' => true,
+            'status' => ['value' => $broadcast->status->value, 'label' => $broadcast->status->label()],
         ];
     }
 

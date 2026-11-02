@@ -29,24 +29,25 @@ class BroadcastPump
     public function __construct(private QuotaManager $quota) {}
 
     /**
-     * Kontak tujuan dari pilihan grup + kontak, unik per alamat.
+     * Kontak tujuan dari pilihan semua kontak, grup, atau kontak satuan, unik per alamat.
      *
-     * @param  array{groups?: list<int>, contacts?: list<int>}|null  $audience
+     * @param  array{all?: bool, groups?: list<int>, contacts?: list<int>}|null  $audience
      * @return Collection<int, Contact>
      */
     public function audience(?array $audience): Collection
     {
+        $all = (bool) ($audience['all'] ?? false);
         $groups = $audience['groups'] ?? [];
         $ids = $audience['contacts'] ?? [];
 
-        if ($groups === [] && $ids === []) {
+        if (! $all && $groups === [] && $ids === []) {
             return new Collection;
         }
 
         return Contact::query()
-            ->where(fn ($q) => $q
+            ->unless($all, fn ($q) => $q->where(fn ($q) => $q
                 ->whereIn('id', $ids)
-                ->orWhereHas('groups', fn ($g) => $g->whereIn('contact_groups.id', $groups)))
+                ->orWhereHas('groups', fn ($g) => $g->whereIn('contact_groups.id', $groups))))
             ->orderBy('name')
             ->get()
             ->unique('email')

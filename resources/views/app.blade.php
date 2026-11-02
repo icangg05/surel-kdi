@@ -4,21 +4,6 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
 
-        {{-- Mode gelap mengikuti sistem hanya bila pengguna memilih "Sistem"; bawaannya terang. --}}
-        <script>
-            (function() {
-                const appearance = '{{ $appearance ?? "light" }}';
-
-                if (appearance === 'system') {
-                    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-
-                    if (prefersDark) {
-                        document.documentElement.classList.add('dark');
-                    }
-                }
-            })();
-        </script>
-
         {{-- Inline style to set the HTML background color based on our theme in app.css --}}
         <style>
             html {

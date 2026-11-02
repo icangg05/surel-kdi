@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Mail;
 use App\Enums\Folder;
 use App\Enums\MessageStatus;
 use App\Http\Controllers\Controller;
-use App\Models\Attachment;
+use App\Models\Broadcast;
 use App\Models\Mailbox;
 use App\Models\Message;
 use App\Models\Thread;
@@ -40,9 +40,11 @@ class ThreadController extends Controller
         MailboxContext::remember($mailbox);
 
         $search = trim((string) $request->query('q', ''));
-        $rows = in_array($folder, ['drafts', 'scheduled'], true)
-            ? $this->outgoingRows($mailbox, $folder, $search)
-            : $this->threadRows($mailbox, $folder, $search);
+        $rows = match ($folder) {
+            'drafts', 'scheduled' => $this->outgoingRows($mailbox, $folder, $search),
+            'sent' => $this->sentRows($mailbox, $search),
+            default => $this->threadRows($mailbox, $folder, $search),
+        };
 
         return Inertia::render('mail/Index', [
             'mailbox' => ['id' => $mailbox->id, 'name' => $mailbox->display_name, 'address' => $mailbox->address],
@@ -53,6 +55,39 @@ class ThreadController extends Controller
         ]);
     }
 
+    /**
+     * Terkirim: utas berisi email keluar + satu baris per siaran yang sudah mulai
+     * dikirim, diurutkan bersama. Siaran tidak membuat utas per penerima.
+     */
+    private function sentRows(Mailbox $mailbox, string $search): mixed
+    {
+        $threads = Thread::query()
+            ->select('id', DB::raw("'thread' as kind"), 'last_message_at as sort_at')
+            ->where('mailbox_id', $mailbox->id)
+            ->whereHas('messages', fn ($q) => $q->where('direction', Message::OUT)->where('status', MessageStatus::Sent))
+            ->where(fn ($q) => $q->whereNull('folder')->orWhere('folder', '!=', Folder::Trash))
+            ->when($search !== '', fn ($q) => $q->whereHas('messages', fn (Builder $m) => $this->searchMessages($m, $search)));
+
+        $broadcasts = Broadcast::query()
+            ->select('id', DB::raw("'broadcast' as kind"), 'started_at as sort_at')
+            ->where('mailbox_id', $mailbox->id)
+            ->whereNotNull('started_at')
+            ->when($search !== '', fn ($q) => $q->where('subject', 'like', '%'.$search.'%'));
+
+        $page = $threads->toBase()->union($broadcasts->toBase())->orderByDesc('sort_at')->paginate(30)->withQueryString();
+        $items = collect($page->items());
+
+        $threadModels = Thread::query()
+            ->with(['messages' => fn ($q) => $q->select('id', 'thread_id', 'direction', 'status', 'from_name', 'from_email', 'to', 'snippet', 'has_attachments', 'received_at', 'sent_at', 'created_at')])
+            ->findMany($items->where('kind', 'thread')->pluck('id'))->keyBy('id');
+        $broadcastModels = Broadcast::query()->withCount('attachments')
+            ->findMany($items->where('kind', 'broadcast')->pluck('id'))->keyBy('id');
+
+        return $page->through(fn (\stdClass $row) => $row->kind === 'thread'
+            ? MailPresenter::threadRow($threadModels[$row->id])
+            : MailPresenter::broadcastRow($broadcastModels[$row->id]));
+    }
+
     private function threadRows(Mailbox $mailbox, string $folder, string $search): mixed
     {
         $query = Thread::query()
@@ -61,8 +96,6 @@ class ThreadController extends Controller
 
         match ($folder) {
             'starred' => $query->where('is_starred', true)->where(fn ($q) => $q->whereNull('folder')->orWhere('folder', '!=', Folder::Trash)),
-            'sent' => $query->whereHas('messages', fn ($q) => $q->where('direction', Message::OUT)->where('status', MessageStatus::Sent))
-                ->where(fn ($q) => $q->whereNull('folder')->orWhere('folder', '!=', Folder::Trash)),
             default => $query->where('folder', $folder),
         };
 
@@ -155,12 +188,27 @@ class ThreadController extends Controller
         $this->authorizeMailbox($request, $thread->mailbox);
         abort_unless(in_array($thread->folder, [Folder::Trash, Folder::Spam], true), 422, 'Pindahkan ke Sampah dulu.');
 
-        Attachment::query()->whereIn('message_id', $thread->messages()->select('id'))->get()->each->delete();
-        $thread->delete();
+        $thread->purge();
 
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Utas dihapus permanen.']);
 
         return to_route('mail.index', [$thread->mailbox_id, $thread->folder->value]);
+    }
+
+    /** Kosongkan Sampah satu mailbox sekarang, tanpa menunggu batas retensi. */
+    public function emptyTrash(Request $request, Mailbox $mailbox): RedirectResponse
+    {
+        $this->authorizeMailbox($request, $mailbox);
+        $count = 0;
+
+        Thread::query()->where('mailbox_id', $mailbox->id)->where('folder', Folder::Trash)->each(function (Thread $thread) use (&$count) {
+            $thread->purge();
+            $count++;
+        });
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => $count ? "Sampah dikosongkan: $count utas dihapus permanen." : 'Sampah sudah kosong.']);
+
+        return to_route('mail.index', [$mailbox, 'trash']);
     }
 
     /** @return array<string, mixed> */

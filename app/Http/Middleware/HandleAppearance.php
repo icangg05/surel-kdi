@@ -16,8 +16,8 @@ class HandleAppearance
      */
     public function handle(Request $request, Closure $next): Response
     {
-        // Bawaan terang; mode gelap/sistem hanya bila pengguna memilihnya di Pengaturan › Tampilan.
-        View::share('appearance', $request->cookie('appearance') ?? 'light');
+        // Selalu terang kecuali pengguna memilih Gelap di Pengaturan › Tampilan (tidak mengikuti tema sistem).
+        View::share('appearance', $request->cookie('appearance') === 'dark' ? 'dark' : 'light');
 
         return $next($request);
     }

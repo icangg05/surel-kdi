@@ -26,6 +26,13 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useBusy } from '@/composables/useBusy';
 import { relative } from '@/lib/format';
@@ -471,18 +478,24 @@ const checks = (d: DomainRow) =>
                             placeholder="kominfo"
                         />
                         <span class="text-muted-foreground">@</span>
-                        <select
-                            v-model.number="mailboxForm.domain_id"
-                            class="h-9 rounded-md border bg-background px-2 font-mono text-[13px]"
-                        >
-                            <option
-                                v-for="d in domains"
-                                :key="d.id"
-                                :value="d.id"
+                        <Select v-model="mailboxForm.domain_id">
+                            <SelectTrigger
+                                class="font-mono text-[13px]"
+                                aria-label="Domain"
                             >
-                                {{ d.name }}
-                            </option>
-                        </select>
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem
+                                    v-for="d in domains"
+                                    :key="d.id"
+                                    :value="d.id"
+                                    class="font-mono text-[13px]"
+                                >
+                                    {{ d.name }}
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
                     </div>
                     <p
                         v-if="

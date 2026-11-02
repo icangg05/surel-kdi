@@ -2,7 +2,7 @@
 import { Clock } from '@lucide/vue';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
-import { SidebarTrigger } from '@/components/ui/sidebar';
+import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
 import type { BreadcrumbItem } from '@/types';
 
 withDefaults(
@@ -13,6 +13,9 @@ withDefaults(
         breadcrumbs: () => [],
     },
 );
+
+// Di layar kecil header ikut biru malam seperti sidebar (yang tampil sebagai laci).
+const { isMobile } = useSidebar();
 
 // Jam WITA seperti topbar portal Diskominfo: jadwal kirim dan reset kuota mengikuti waktu ini.
 const now = ref(new Date());
@@ -42,7 +45,10 @@ const time = computed(() =>
 
 <template>
     <header
-        class="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 border-b bg-background px-4 sm:px-6"
+        :class="[
+            'sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 border-b px-4 sm:px-6',
+            isMobile ? 'surface-navy' : 'bg-background',
+        ]"
     >
         <SidebarTrigger class="-ml-1.5 text-muted-foreground" />
         <span class="h-5 w-px bg-border" aria-hidden="true" />

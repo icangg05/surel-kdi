@@ -32,6 +32,7 @@ Route::middleware(['auth'])->group(function () {
     Route::patch('threads/{thread}', [ThreadController::class, 'update'])->name('threads.update');
     Route::post('threads/bulk', [ThreadController::class, 'bulk'])->name('threads.bulk');
     Route::delete('threads/{thread}', [ThreadController::class, 'destroy'])->name('threads.destroy');
+    Route::delete('mail/{mailbox}/trash', [ThreadController::class, 'emptyTrash'])->name('mail.empty-trash');
     Route::get('messages/{message}/body', MessageBodyController::class)->name('messages.body');
     Route::post('messages/{message}/unschedule', [DraftController::class, 'unschedule'])->name('messages.unschedule');
 
@@ -60,9 +61,9 @@ Route::middleware(['auth'])->group(function () {
 
     // Siaran & templat
     Route::resource('templates', TemplateController::class)->except(['show']);
-    Route::resource('broadcasts', BroadcastController::class)->except(['create']);
+    Route::post('broadcasts/estimate', [BroadcastController::class, 'estimate'])->name('broadcasts.estimate');
+    Route::resource('broadcasts', BroadcastController::class);
     Route::prefix('broadcasts/{broadcast}')->name('broadcasts.')->controller(BroadcastController::class)->group(function () {
-        Route::post('estimate', 'estimate')->name('estimate');
         Route::post('preview', 'preview')->name('preview');
         Route::post('test', 'test')->middleware('throttle:10,1')->name('test');
         Route::post('launch', 'launch')->name('launch');

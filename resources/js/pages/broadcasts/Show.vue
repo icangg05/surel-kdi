@@ -194,12 +194,18 @@ const showBody = ref(false);
                 </p>
             </div>
             <div class="flex shrink-0 flex-wrap gap-2">
-                <Button
+                <ConfirmDialog
                     v-if="broadcast.status === 'scheduled'"
-                    variant="outline"
-                    @click="act(broadcastRoutes.unschedule)"
-                    ><CalendarX /> Batalkan jadwal</Button
+                    title="Batalkan jadwal siaran ini?"
+                    description="Siaran tidak dikirim pada jadwalnya dan kembali menjadi draf. Anda bisa menjadwalkan ulang dari halaman susun siaran."
+                    confirm-label="Batalkan jadwal"
+                    destructive
+                    @confirm="act(broadcastRoutes.unschedule)"
                 >
+                    <Button variant="outline"
+                        ><CalendarX /> Batalkan jadwal</Button
+                    >
+                </ConfirmDialog>
                 <Button
                     v-if="
                         ['sending', 'waiting_quota'].includes(broadcast.status)

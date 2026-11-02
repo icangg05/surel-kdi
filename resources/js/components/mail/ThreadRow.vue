@@ -62,7 +62,11 @@ const emit = defineEmits<{ toggleSelect: []; toggleStar: []; open: [] }>();
             :href="href"
             preserve-scroll
             preserve-state
-            :only="href ? ['thread', 'mail'] : undefined"
+            :only="
+                href && row.kind !== 'broadcast'
+                    ? ['thread', 'mail']
+                    : undefined
+            "
             type="button"
             class="min-w-0 flex-1 text-left outline-none after:absolute after:inset-0 focus-visible:after:ring-2 focus-visible:after:ring-ring/50 focus-visible:after:ring-inset"
             @click="!href && emit('open')"
@@ -97,7 +101,9 @@ const emit = defineEmits<{ toggleSelect: []; toggleStar: []; open: [] }>();
                 <Megaphone
                     v-if="row.broadcast"
                     class="size-3.5 shrink-0 text-info"
-                    aria-label="Balasan siaran"
+                    :aria-label="
+                        row.kind === 'broadcast' ? 'Siaran' : 'Balasan siaran'
+                    "
                 />
                 <span
                     :class="[

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Monitor, Moon, Sun } from '@lucide/vue';
+import { Moon, Sun } from '@lucide/vue';
 import { useAppearance } from '@/composables/useAppearance';
 
 const { appearance, updateAppearance } = useAppearance();
@@ -7,7 +7,6 @@ const { appearance, updateAppearance } = useAppearance();
 const tabs = [
     { value: 'light', Icon: Sun, label: 'Terang' },
     { value: 'dark', Icon: Moon, label: 'Gelap' },
-    { value: 'system', Icon: Monitor, label: 'Sistem' },
 ] as const;
 </script>
 

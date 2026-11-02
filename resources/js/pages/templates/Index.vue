@@ -69,9 +69,11 @@ defineOptions({
                         size="sm"
                         variant="outline"
                         @click="
-                            router.post(broadcastRoutes.store.url(), {
-                                template_id: t.id,
-                            })
+                            router.visit(
+                                broadcastRoutes.create.url({
+                                    query: { template: t.id },
+                                }),
+                            )
                         "
                         ><Megaphone /> Pakai untuk siaran</Button
                     >

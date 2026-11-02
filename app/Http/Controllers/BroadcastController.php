@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\BroadcastStatus;
+use App\Enums\ContactStatus;
 use App\Enums\DeliveryStatus;
 use App\Mail\OutgoingMail;
 use App\Models\Attachment;
@@ -31,6 +32,8 @@ use Inertia\Response;
 
 class BroadcastController extends Controller
 {
+    private const DEFAULT_BODY = '<p>Yth. {{nama}},</p><p></p>';
+
     public function __construct(private BroadcastPump $pump, private QuotaManager $quota) {}
 
     public function index(Request $request): Response
@@ -58,29 +61,53 @@ class BroadcastController extends Controller
         ]);
     }
 
-    /** "Siaran baru" langsung membuat draf supaya lampiran bisa diunggah sejak awal. */
-    public function store(Request $request): RedirectResponse
+    /**
+     * Formulir siaran baru. Belum ada yang disimpan: draf baru dibuat saat operator
+     * lanjut dari langkah Penerima, supaya siaran yang batal disusun tidak menumpuk.
+     */
+    public function create(Request $request): Response
     {
-        $data = $request->validate([
-            'template_id' => ['nullable', 'integer', 'exists:templates,id'],
-            'groups' => ['array'], 'groups.*' => ['integer'],
-        ]);
-
         $mailbox = MailboxContext::current($request->user());
         abort_unless($mailbox !== null, 403, 'Anda belum ditugaskan ke mailbox mana pun.');
-        $template = isset($data['template_id']) ? Template::query()->find((int) $data['template_id']) : null;
+        $template = Template::query()->find($request->integer('template'));
 
-        $broadcast = Broadcast::create([
+        return Inertia::render('broadcasts/Form', [
+            'broadcast' => [
+                'id' => null,
+                'mailbox_id' => $mailbox->id,
+                'template_id' => $template?->id,
+                'subject' => $template->subject ?? '',
+                'body_html' => $template->body_html ?? self::DEFAULT_BODY,
+                'status' => BroadcastStatus::Draft->value,
+                'scheduled_at' => null,
+                'all' => false,
+                'groups' => [],
+                'contacts' => [],
+                'attachments' => [],
+            ],
+            ...$this->formOptions($request),
+            'step' => 0,
+        ]);
+    }
+
+    /** Langkah Penerima selesai: draf dibuat, lalu lanjut ke langkah Isi. */
+    public function store(Request $request): RedirectResponse
+    {
+        $mailbox = MailboxContext::current($request->user());
+        abort_unless($mailbox !== null, 403, 'Anda belum ditugaskan ke mailbox mana pun.');
+
+        $broadcast = new Broadcast([
             'mailbox_id' => $mailbox->id,
             'user_id' => $request->user()->id,
-            'template_id' => $template?->id,
-            'subject' => $template->subject ?? '',
-            'body_html' => $template->body_html ?? '<p>Yth. {{nama}},</p><p></p>',
-            'audience' => ['groups' => $data['groups'] ?? [], 'contacts' => []],
+            'subject' => '',
+            'body_html' => self::DEFAULT_BODY,
             'status' => BroadcastStatus::Draft,
+            ...$this->validated($request),
         ]);
+        $broadcast->fillFromTemplate();
+        $broadcast->save();
 
-        return to_route('broadcasts.edit', $broadcast);
+        return to_route('broadcasts.edit', [$broadcast, 'step' => 1]);
     }
 
     public function edit(Request $request, Broadcast $broadcast): Response|RedirectResponse
@@ -91,21 +118,26 @@ class BroadcastController extends Controller
             return to_route('broadcasts.show', $broadcast);
         }
 
+        $broadcast->fillFromTemplate();
+
+        if ($broadcast->isDirty()) {
+            $broadcast->save();
+        }
+
         $audience = $broadcast->audience ?? [];
 
         return Inertia::render('broadcasts/Form', [
             'broadcast' => [
-                ...$broadcast->only('id', 'mailbox_id', 'subject', 'body_html'),
+                ...$broadcast->only('id', 'mailbox_id', 'template_id', 'subject', 'body_html'),
                 'status' => $broadcast->status->value,
                 'scheduled_at' => $broadcast->scheduled_at?->toIso8601String(),
+                'all' => (bool) ($audience['all'] ?? false),
                 'groups' => $audience['groups'] ?? [],
-                'contacts' => Contact::query()->whereIn('id', $audience['contacts'] ?? [])->get(['id', 'name', 'email', 'organization']),
+                'contacts' => $audience['contacts'] ?? [],
                 'attachments' => $broadcast->attachments->map(fn (Attachment $a) => MailPresenter::attachment($a)),
             ],
-            'groups' => ContactGroup::query()->withCount(['contacts', 'contacts as sendable_count' => fn ($q) => $q->sendable()])->orderBy('name')->get(['id', 'name', 'color']),
-            'templates' => Template::query()->orderBy('name')->get(['id', 'name', 'subject', 'body_html']),
-            'mailboxes' => MailboxContext::accessible($request->user())->map(fn ($m) => ['id' => $m->id, 'name' => $m->display_name, 'address' => $m->address])->values(),
-            'mergeFields' => MergeFields::available(),
+            ...$this->formOptions($request),
+            'step' => min(3, max(0, $request->integer('step'))),
         ]);
     }
 
@@ -115,7 +147,9 @@ class BroadcastController extends Controller
         $this->authorizeMailbox($request, $broadcast->mailbox);
         abort_unless($broadcast->isEditable(), 422, 'Siaran yang sudah berjalan tidak bisa diubah.');
 
-        $broadcast->update($this->validated($request));
+        $broadcast->fill($this->validated($request));
+        $broadcast->fillFromTemplate();
+        $broadcast->save();
 
         if ($request->wantsJson()) {
             return response()->json(['saved_at' => now()->toIso8601String()]);
@@ -126,13 +160,19 @@ class BroadcastController extends Controller
         return back();
     }
 
-    /** Hitungan penerima + perkiraan jadwal kuota, untuk langkah Jadwal di wizard. */
-    public function estimate(Request $request, Broadcast $broadcast): JsonResponse
+    /**
+     * Hitungan penerima + perkiraan jadwal kuota. Tidak terikat ke satu siaran:
+     * dipakai juga sebelum draf dibuat (langkah Penerima pada siaran baru).
+     */
+    public function estimate(Request $request): JsonResponse
     {
-        $this->authorizeMailbox($request, $broadcast->mailbox);
-        $data = $request->validate(['groups' => ['array'], 'contacts' => ['array'], 'scheduled_at' => ['nullable', 'date']]);
+        $data = $request->validate(['all' => ['boolean'], 'groups' => ['array'], 'contacts' => ['array'], 'scheduled_at' => ['nullable', 'date']]);
 
-        $audience = $this->pump->audience(['groups' => array_map('intval', $data['groups'] ?? []), 'contacts' => array_map('intval', $data['contacts'] ?? [])]);
+        $audience = $this->pump->audience([
+            'all' => (bool) ($data['all'] ?? false),
+            'groups' => array_values(array_map('intval', $data['groups'] ?? [])),
+            'contacts' => array_values(array_map('intval', $data['contacts'] ?? [])),
+        ]);
         $sendable = $audience->filter(fn (Contact $c) => $c->status->value === 'active');
         $start = isset($data['scheduled_at']) ? CarbonImmutable::parse($data['scheduled_at']) : null;
 
@@ -201,6 +241,8 @@ class BroadcastController extends Controller
         abort_unless($broadcast->isEditable(), 422);
 
         $data = $request->validate(['scheduled_at' => ['nullable', 'date']]);
+        $broadcast->fillFromTemplate();
+        $broadcast->save();
 
         if (blank($broadcast->subject) || blank(trim(strip_tags($broadcast->body_html)))) {
             throw ValidationException::withMessages(['subject' => 'Subjek dan isi siaran wajib diisi.']);
@@ -331,22 +373,64 @@ class BroadcastController extends Controller
         return to_route('broadcasts.index');
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * Atribut dari wizard. Subjek, isi, dan templat hanya disetel bila dikirim,
+     * supaya langkah Penerima (yang belum punya isi) tidak mengosongkannya.
+     *
+     * @return array<string, mixed>
+     */
     private function validated(Request $request): array
     {
         $data = $request->validate([
             'mailbox_id' => ['sometimes', 'integer', Rule::in(MailboxContext::accessible($request->user())->pluck('id'))],
+            'template_id' => ['nullable', 'integer', 'exists:templates,id'],
             'subject' => ['nullable', 'string', 'max:250'],
             'body_html' => ['nullable', 'string', 'max:1000000'],
+            'all' => ['boolean'],
             'groups' => ['array'], 'groups.*' => ['integer', 'exists:contact_groups,id'],
             'contacts' => ['array'], 'contacts.*' => ['integer', 'exists:contacts,id'],
         ]);
 
-        return array_filter([
-            'mailbox_id' => $data['mailbox_id'] ?? null,
-            'subject' => $data['subject'] ?? '',
-            'body_html' => MailHtml::sanitize($data['body_html'] ?? ''),
-            'audience' => ['groups' => array_values(array_map('intval', $data['groups'] ?? [])), 'contacts' => array_values(array_map('intval', $data['contacts'] ?? []))],
-        ], fn ($v) => $v !== null);
+        $attributes = ['audience' => [
+            'all' => (bool) ($data['all'] ?? false),
+            'groups' => array_values(array_map('intval', $data['groups'] ?? [])),
+            'contacts' => array_values(array_map('intval', $data['contacts'] ?? [])),
+        ]];
+
+        if (isset($data['mailbox_id'])) {
+            $attributes['mailbox_id'] = (int) $data['mailbox_id'];
+        }
+
+        if ($request->has('template_id')) {
+            $attributes['template_id'] = isset($data['template_id']) ? (int) $data['template_id'] : null;
+        }
+
+        if ($request->has('subject')) {
+            $attributes['subject'] = $data['subject'] ?? '';
+        }
+
+        if ($request->has('body_html')) {
+            $attributes['body_html'] = MailHtml::sanitize($data['body_html'] ?? '');
+        }
+
+        return $attributes;
+    }
+
+    /** @return array<string, mixed> */
+    private function formOptions(Request $request): array
+    {
+        return [
+            'groups' => ContactGroup::query()->withCount(['contacts', 'contacts as sendable_count' => fn ($q) => $q->sendable()])->orderBy('name')->get(['id', 'name', 'color']),
+            // Semua kontak, supaya penerima bisa dicentang dari daftar nama, bukan diketik satu per satu.
+            'contacts' => Contact::query()->with('groups:id')->orderBy('name')->get(['id', 'name', 'email', 'organization', 'status'])
+                ->map(fn (Contact $c) => [
+                    ...$c->only('id', 'name', 'email', 'organization'),
+                    'sendable' => $c->status === ContactStatus::Active,
+                    'groups' => $c->groups->pluck('id'),
+                ]),
+            'templates' => Template::query()->orderBy('name')->get(['id', 'name', 'subject', 'body_html']),
+            'mailboxes' => MailboxContext::accessible($request->user())->map(fn ($m) => ['id' => $m->id, 'name' => $m->display_name, 'address' => $m->address])->values(),
+            'mergeFields' => MergeFields::available(),
+        ];
     }
 }

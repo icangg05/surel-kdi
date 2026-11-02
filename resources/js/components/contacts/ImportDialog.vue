@@ -12,6 +12,13 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { number } from '@/lib/format';
 import { json } from '@/lib/http';
@@ -44,7 +51,8 @@ const preview = ref<Preview | null>(null);
 const loading = ref(false);
 const error = ref('');
 const updateExisting = ref(true);
-const groupId = ref<number | ''>('');
+// 0 = tanpa grup (Select tidak menerima nilai kosong).
+const groupId = ref(0);
 
 watch(open, (v) => {
     if (v) {
@@ -223,19 +231,21 @@ function submit() {
                     >
                     <label class="flex items-center gap-2 text-sm">
                         Masukkan semua ke grup
-                        <select
-                            v-model="groupId"
-                            class="h-9 rounded-md border bg-background px-2 text-sm"
-                        >
-                            <option value="">Tanpa grup</option>
-                            <option
-                                v-for="g in groups"
-                                :key="g.id"
-                                :value="g.id"
-                            >
-                                {{ g.name }}
-                            </option>
-                        </select>
+                        <Select v-model="groupId">
+                            <SelectTrigger class="min-w-40">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem :value="0">Tanpa grup</SelectItem>
+                                <SelectItem
+                                    v-for="g in groups"
+                                    :key="g.id"
+                                    :value="g.id"
+                                >
+                                    {{ g.name }}
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
                     </label>
                 </div>
             </template>

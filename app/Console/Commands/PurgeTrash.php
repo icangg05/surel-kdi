@@ -3,7 +3,6 @@
 namespace App\Console\Commands;
 
 use App\Enums\Folder;
-use App\Models\Attachment;
 use App\Models\Thread;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -19,9 +18,7 @@ class PurgeTrash extends Command
         $count = 0;
 
         Thread::query()->where('folder', Folder::Trash)->where('trashed_at', '<', $cutoff)->each(function (Thread $thread) use (&$count) {
-            // Lewat model supaya berkas lampiran ikut terhapus dari disk.
-            Attachment::query()->whereIn('message_id', $thread->messages()->select('id'))->get()->each->delete();
-            $thread->delete();
+            $thread->purge();
             $count++;
         });
 

@@ -32,6 +32,13 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from '@/components/ui/popover';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { useCompose } from '@/composables/useCompose';
 import { json } from '@/lib/http';
 import {
@@ -299,18 +306,24 @@ async function convertToBroadcast() {
                 <span class="w-12 shrink-0 text-sm text-muted-foreground"
                     >Dari</span
                 >
-                <select
-                    v-model.number="form.mailbox_id"
-                    class="h-8 flex-1 rounded-md bg-transparent text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                >
-                    <option
-                        v-for="m in mail?.mailboxes"
-                        :key="m.id"
-                        :value="m.id"
+                <Select v-model="form.mailbox_id">
+                    <SelectTrigger
+                        size="sm"
+                        class="min-w-0 flex-1 border-0 px-0 shadow-none dark:bg-transparent"
+                        aria-label="Kirim dari mailbox"
                     >
-                        {{ m.name }} &lt;{{ m.address }}&gt;
-                    </option>
-                </select>
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem
+                            v-for="m in mail?.mailboxes"
+                            :key="m.id"
+                            :value="m.id"
+                        >
+                            {{ m.name }} &lt;{{ m.address }}&gt;
+                        </SelectItem>
+                    </SelectContent>
+                </Select>
             </div>
 
             <div class="relative">

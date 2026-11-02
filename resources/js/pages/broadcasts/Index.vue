@@ -57,7 +57,7 @@ const href = (b: Row) =>
             title="Siaran"
             description="Satu isi dikirim personal ke banyak kontak, sehingga tiap penerima mendapat email sendiri. Pengiriman otomatis dibagi mengikuti kuota harian Brevo."
         >
-            <Button @click="router.post(broadcastRoutes.store.url())"
+            <Button @click="router.visit(broadcastRoutes.create.url())"
                 ><Plus /> Siaran baru</Button
             >
         </PageHeader>
@@ -182,7 +182,7 @@ const href = (b: Row) =>
                 title="Belum ada siaran"
                 description="Kirim surat edaran atau undangan ke grup kontak. Balasan masuk ke Kotak Masuk dan tertaut ke siarannya."
             >
-                <Button @click="router.post(broadcastRoutes.store.url())"
+                <Button @click="router.visit(broadcastRoutes.create.url())"
                     ><Plus /> Buat siaran pertama</Button
                 >
             </EmptyState>

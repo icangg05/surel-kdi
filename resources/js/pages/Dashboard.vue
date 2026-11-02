@@ -16,7 +16,7 @@ import EmptyState from '@/components/EmptyState.vue';
 import StatusBadge from '@/components/mail/StatusBadge.vue';
 import { Button } from '@/components/ui/button';
 import { useCompose } from '@/composables/useCompose';
-import { dateOnly, number, shortDate } from '@/lib/format';
+import { dateOnly, number, shortDate, witaTime } from '@/lib/format';
 import { dashboard } from '@/routes';
 import admin from '@/routes/admin';
 import broadcastRoutes from '@/routes/broadcasts';
@@ -102,12 +102,7 @@ const openRate = computed(() =>
         ? Math.round((props.totals.opened_7d / props.totals.sent_7d) * 100)
         : null,
 );
-const resetTime = computed(() =>
-    new Date(props.quota.resets_at).toLocaleTimeString('id-ID', {
-        hour: '2-digit',
-        minute: '2-digit',
-    }),
-);
+const resetTime = computed(() => witaTime(props.quota.resets_at));
 const progress = (s: Stats) =>
     s.total ? Math.round(((s.total - s.pending) / s.total) * 100) : 0;
 const brevoCredits = computed(

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
-import { number } from '@/lib/format';
+import { number, witaTime } from '@/lib/format';
 
 const page = usePage();
 const quota = computed(() => page.props.mail?.quota);
@@ -17,14 +17,7 @@ const tone = computed(() =>
           ? 'bg-warning'
           : 'bg-sidebar-primary',
 );
-const resets = computed(() =>
-    quota.value
-        ? new Date(quota.value.resets_at).toLocaleTimeString('id-ID', {
-              hour: '2-digit',
-              minute: '2-digit',
-          })
-        : '',
-);
+const resets = computed(() => witaTime(quota.value?.resets_at));
 </script>
 
 <template>
@@ -60,9 +53,7 @@ const resets = computed(() =>
                 >Sisa {{ number(quota.remaining) }} email · reset
                 {{ resets }}</template
             >
-            <template v-else
-                >Habis — antrean lanjut pukul {{ resets }}</template
-            >
+            <template v-else>Habis, antrean lanjut pukul {{ resets }}</template>
         </p>
     </div>
 </template>

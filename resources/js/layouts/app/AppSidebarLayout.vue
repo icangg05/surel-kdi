@@ -8,6 +8,7 @@ import AppSidebar from '@/components/AppSidebar.vue';
 import AppSidebarHeader from '@/components/AppSidebarHeader.vue';
 import { Toaster } from '@/components/ui/sonner';
 import { useCompose } from '@/composables/useCompose';
+import { useRealtime } from '@/composables/useRealtime';
 import { useShortcuts } from '@/composables/useShortcuts';
 import admin from '@/routes/admin';
 import type { BreadcrumbItem } from '@/types';
@@ -31,7 +32,9 @@ const ComposePanel = defineAsyncComponent(
 const page = usePage();
 const compose = useCompose();
 
-// Jumlah belum dibaca & kuota di sidebar diperbarui tiap 30 detik tanpa memuat ulang halaman.
+// Email masuk & status kirim didorong lewat Reverb. Polling 30 detik tetap jalan
+// untuk kuota, dan sebagai cadangan bila koneksi WebSocket terputus.
+useRealtime();
 usePoll(30_000, { only: ['mail'] });
 
 const smtpError = computed(() => page.props.mail?.smtp_error ?? null);

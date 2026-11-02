@@ -143,8 +143,8 @@ return [
     |
     */
 
+    // Tanpa resetPasswords(): tidak ada "lupa kata sandi"; sandi direset oleh admin.
     'features' => [
-        Features::resetPasswords(),
         Features::twoFactorAuthentication([
             'confirm' => true,
             'confirmPassword' => true,

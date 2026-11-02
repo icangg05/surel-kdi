@@ -56,6 +56,10 @@ class HandleInertiaRequests extends Middleware
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             // Dibaca ulang oleh polling sidebar (only: ['mail']), jadi dibuat lazy.
             'mail' => fn () => $user ? $this->mail($request) : null,
+            'realtime' => fn () => $user && config('broadcasting.default') === 'reverb' ? [
+                'key' => config('broadcasting.connections.reverb.key'),
+                ...config('broadcasting.connections.reverb.public'),
+            ] : null,
         ];
     }
 

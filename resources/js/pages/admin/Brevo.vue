@@ -16,10 +16,11 @@ import StatusBadge from '@/components/mail/StatusBadge.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useBusy } from '@/composables/useBusy';
 import { number, relative, shortDate } from '@/lib/format';
 import admin from '@/routes/admin';
 
-const props = defineProps<{
+defineProps<{
     smtp: {
         host: string;
         port: number;
@@ -60,6 +61,8 @@ const props = defineProps<{
         description: string;
         domain?: string;
         url: string;
+        registered: boolean;
+        stale: string | null;
         error: { message: string; at: string } | null;
     }[];
     publicUrl: boolean;
@@ -84,14 +87,8 @@ defineOptions({
 });
 
 const page = usePage();
+const busy = useBusy();
 const test = useForm({ email: String(page.props.auth.user?.email ?? '') });
-const registered = (e: { type: string; domain?: string }) =>
-    props.webhooks?.some(
-        (w) =>
-            w.ours &&
-            w.type === e.type &&
-            (e.type !== 'inbound' || w.domain === e.domain),
-    ) ?? false;
 </script>
 
 <template>
@@ -154,15 +151,22 @@ const registered = (e: { type: string; domain?: string }) =>
                     Dicek {{ relative(smtp.checked_at) }} tanpa mengirim email.
                     <button
                         type="button"
-                        class="font-medium text-foreground underline-offset-2 hover:underline"
+                        class="inline-flex items-center gap-1 font-medium text-foreground underline-offset-2 hover:underline disabled:opacity-60"
+                        :disabled="busy.is('smtp')"
                         @click="
                             router.get(
                                 admin.brevo.url(),
                                 { recheck: 1 },
-                                { preserveScroll: true },
+                                { preserveScroll: true, ...busy.track('smtp') },
                             )
                         "
                     >
+                        <RefreshCw
+                            :class="[
+                                'size-3',
+                                { 'animate-spin': busy.is('smtp') },
+                            ]"
+                        />
                         Cek ulang
                     </button>
                 </p>
@@ -234,14 +238,18 @@ const registered = (e: { type: string; domain?: string }) =>
                         variant="outline"
                         size="sm"
                         class="mt-4"
+                        :disabled="busy.is('sync')"
                         @click="
                             router.post(
                                 admin.brevo.sync.url(),
                                 {},
-                                { preserveScroll: true },
+                                { preserveScroll: true, ...busy.track('sync') },
                             )
                         "
-                        ><RefreshCw /> Perbarui info akun</Button
+                        ><RefreshCw
+                            :class="{ 'animate-spin': busy.is('sync') }"
+                        />
+                        Perbarui info akun</Button
                     >
                     <p
                         v-if="api.account"
@@ -327,9 +335,14 @@ const registered = (e: { type: string; domain?: string }) =>
                     class="flex flex-wrap items-center gap-3 px-5 py-3"
                 >
                     <CheckCircle2
-                        v-if="registered(e)"
+                        v-if="e.registered"
                         class="size-4 text-success"
                         aria-label="Terdaftar"
+                    />
+                    <AlertTriangle
+                        v-else-if="e.stale"
+                        class="size-4 text-warning"
+                        aria-label="Mengarah ke URL lama"
                     />
                     <XCircle
                         v-else
@@ -340,13 +353,20 @@ const registered = (e: { type: string; domain?: string }) =>
                         <p class="text-sm font-medium">
                             {{
                                 e.type === 'inbound'
-                                    ? `Email masuk — ${e.domain}`
+                                    ? `Email masuk ke ${e.domain}`
                                     : 'Status pengiriman (transaksional)'
                             }}
                         </p>
                         <CopyText :value="e.url" class="mt-1" />
+                        <p
+                            v-if="e.stale && !e.registered"
+                            class="mt-2 text-xs text-warning"
+                        >
+                            Brevo masih mengirim ke {{ e.stale }}, bukan ke URL
+                            ini. Klik Daftarkan webhook untuk memindahkannya.
+                        </p>
                         <div
-                            v-if="e.error && !registered(e)"
+                            v-if="e.error && !e.registered"
                             class="mt-2 rounded-md bg-danger-soft px-3 py-2 text-xs text-danger"
                         >
                             <p>
@@ -357,7 +377,18 @@ const registered = (e: { type: string; domain?: string }) =>
                                 }}</span>
                             </p>
                             <p
-                                v-if="e.type === 'inbound'"
+                                v-if="
+                                    /permission_denied/i.test(e.error.message)
+                                "
+                                class="mt-1 text-danger/80"
+                            >
+                                API key ini tidak diizinkan mengubah webhook. Di
+                                Brevo › SMTP & API › API keys, beri key ini
+                                akses tulis untuk Webhooks, lalu daftarkan
+                                ulang.
+                            </p>
+                            <p
+                                v-else-if="e.type === 'inbound'"
                                 class="mt-1 text-danger/80"
                             >
                                 <template
@@ -381,11 +412,13 @@ const registered = (e: { type: string; domain?: string }) =>
                         </div>
                     </div>
                     <span class="text-xs text-muted-foreground">{{
-                        registered(e)
+                        e.registered
                             ? 'Terdaftar di Brevo'
-                            : webhooks === null
-                              ? 'Tidak bisa dicek tanpa API key'
-                              : 'Belum terdaftar'
+                            : e.stale
+                              ? 'URL lama'
+                              : webhooks === null
+                                ? 'Tidak bisa dicek tanpa API key'
+                                : 'Belum terdaftar'
                     }}</span>
                 </li>
             </ul>
@@ -449,14 +482,24 @@ const registered = (e: { type: string; domain?: string }) =>
                                     v-if="p.error"
                                     variant="ghost"
                                     size="sm"
+                                    :disabled="busy.is(p.id)"
                                     @click="
                                         router.post(
                                             admin.brevo.reprocess.url(p.id),
                                             {},
-                                            { preserveScroll: true },
+                                            {
+                                                preserveScroll: true,
+                                                ...busy.track(p.id),
+                                            },
                                         )
                                     "
-                                    ><RotateCcw /> Proses ulang</Button
+                                    ><RotateCcw
+                                        :class="{
+                                            'animate-spin [animation-direction:reverse]':
+                                                busy.is(p.id),
+                                        }"
+                                    />
+                                    Proses ulang</Button
                                 >
                             </td>
                         </tr>

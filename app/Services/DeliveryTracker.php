@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\ContactStatus;
 use App\Enums\DeliveryStatus;
+use App\Events\MailboxUpdated;
 use App\Models\Delivery;
 use App\Models\DeliveryEvent;
 use App\Models\Message;
@@ -97,6 +98,12 @@ class DeliveryTracker
         }
 
         $delivery->update($changes);
+
+        // Hanya email biasa: siaran ke ratusan penerima akan membanjiri browser,
+        // halaman siaran sudah memantau progresnya sendiri.
+        if ($overrides && $delivery->message_id && ! $delivery->broadcast_id && $delivery->message) {
+            MailboxUpdated::dispatch($delivery->message->mailbox_id, 'status', $delivery->message->thread_id);
+        }
 
         $suppress = match ($status) {
             DeliveryStatus::HardBounce => ContactStatus::Bounced,

@@ -8,6 +8,7 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Inertia\Testing\AssertableInertia as Assert;
 
 class BrevoApiTest extends MailTestCase
 {
@@ -55,6 +56,25 @@ class BrevoApiTest extends MailTestCase
         Http::assertSent(fn (Request $r) => $r->method() === 'DELETE' && str_ends_with($r->url(), 'webhooks/8'));
         Http::assertNotSent(fn (Request $r) => $r->method() === 'DELETE' && str_ends_with($r->url(), 'webhooks/9'));
         Http::assertSent(fn (Request $r) => $r->method() === 'POST' && $r['url'] === 'https://baru.trycloudflare.com/webhooks/brevo/inbound/rahasia-uji');
+    }
+
+    public function test_admin_page_flags_webhooks_still_pointing_at_an_old_url(): void
+    {
+        config(['app.url' => 'https://surel.example.test']);
+        Http::fake(fn (Request $request) => Http::response(['webhooks' => str_contains($request->url(), 'type=inbound')
+            ? [['id' => 8, 'url' => 'https://lama.trycloudflare.com/webhooks/brevo/inbound/rahasia-uji', 'domain' => 'in.ilmifaizan.cloud']]
+            : [['id' => 7, 'url' => 'https://surel.example.test/webhooks/brevo/events/rahasia-uji']]]));
+
+        $this->actingAs($this->admin)->get(route('admin.brevo'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('expected.0.type', 'transactional')
+                ->where('expected.0.registered', true)
+                ->where('expected.0.stale', null)
+                ->where('expected.1.type', 'inbound')
+                ->where('expected.1.registered', false)
+                ->where('expected.1.stale', 'lama.trycloudflare.com')
+                ->where('webhooks.0.url', 'https://surel.example.test/webhooks/brevo/events/raha•••••••')
+            );
     }
 
     public function test_other_api_errors_still_surface(): void

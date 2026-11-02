@@ -47,7 +47,8 @@ class DraftController extends Controller
             abort_unless($source->mailbox_id === $mailbox->id, 403);
         }
 
-        $signature = $mailbox->signature_html ? '<p></p><div data-signature>'.$mailbox->signature_html.'</div>' : '';
+        // Isi langsung dibuka tanda tangan, tanpa baris kosong di atasnya; tanpa tanda tangan, satu paragraf kosong untuk mengetik.
+        $opening = $mailbox->signature_html ? '<div data-signature>'.$mailbox->signature_html.'</div>' : '<p></p>';
         $draft = new Message([
             'mailbox_id' => $mailbox->id,
             'user_id' => $request->user()->id,
@@ -57,12 +58,12 @@ class DraftController extends Controller
             'from_name' => $mailbox->display_name,
             'to' => $this->cleanList($data['to'] ?? []),
             'subject' => '',
-            'body_html' => '<p></p>'.$signature,
+            'body_html' => $opening,
             'is_read' => true,
         ]);
 
         if ($source && $mode !== 'new') {
-            $this->prefill($draft, $source, $mode, $mailbox, $signature);
+            $this->prefill($draft, $source, $mode, $mailbox, $opening);
         }
 
         $draft->save();
@@ -214,13 +215,13 @@ class DraftController extends Controller
 
         $unknown = count($emails) - count($contactIds);
         $this->toast($unknown > 0
-            ? "Siaran dibuat. $unknown alamat belum ada di Kontak sehingga tidak ikut — tambahkan dulu bila perlu."
+            ? "Siaran dibuat. $unknown alamat belum ada di Kontak sehingga tidak ikut. Tambahkan dulu bila perlu."
             : 'Siaran dibuat dari draf. Periksa lalu kirim.', $unknown > 0 ? 'warning' : 'success');
 
         return to_route('broadcasts.edit', $broadcast);
     }
 
-    private function prefill(Message $draft, Message $source, string $mode, Mailbox $mailbox, string $signature): void
+    private function prefill(Message $draft, Message $source, string $mode, Mailbox $mailbox, string $opening): void
     {
         $subject = preg_replace('/^((re|fwd?|bls|tr)\s*:\s*)+/i', '', $source->subject) ?? $source->subject;
         $own = [$mailbox->address, $mailbox->inbound_address];
@@ -231,7 +232,7 @@ class DraftController extends Controller
 
         if ($mode === 'forward') {
             $draft->subject = 'Fwd: '.$subject;
-            $draft->body_html = '<p></p>'.$signature.'<p>---------- Pesan diteruskan ----------<br>Dari: '.$who.'<br>Tanggal: '.e((string) $date).'<br>Subjek: '.e($source->subject).'</p>'.$source->body_html;
+            $draft->body_html = $opening.'<p>---------- Pesan diteruskan ----------<br>Dari: '.$who.'<br>Tanggal: '.e((string) $date).'<br>Subjek: '.e($source->subject).'</p>'.$source->body_html;
 
             return;
         }
@@ -254,7 +255,7 @@ class DraftController extends Controller
             $draft->cc = $this->cleanList($others);
         }
 
-        $draft->body_html = '<p></p>'.$signature.'<p>Pada '.e((string) $date).', '.$who.' menulis:</p><blockquote>'.$source->body_html.'</blockquote>';
+        $draft->body_html = $opening.'<p>Pada '.e((string) $date).', '.$who.' menulis:</p><blockquote>'.$source->body_html.'</blockquote>';
     }
 
     private function copyAttachments(Message $source, Message $draft): void

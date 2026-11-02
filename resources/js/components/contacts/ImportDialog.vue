@@ -227,7 +227,7 @@ function submit() {
                             v-model="groupId"
                             class="h-9 rounded-md border bg-background px-2 text-sm"
                         >
-                            <option value="">— tidak —</option>
+                            <option value="">Tanpa grup</option>
                             <option
                                 v-for="g in groups"
                                 :key="g.id"

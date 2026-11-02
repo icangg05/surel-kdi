@@ -27,6 +27,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { useBusy } from '@/composables/useBusy';
 import { relative } from '@/lib/format';
 import admin from '@/routes/admin';
 
@@ -82,6 +83,7 @@ defineOptions({
 });
 
 // Domain
+const busy = useBusy();
 const domainOpen = ref(false);
 const editingDomain = ref<DomainRow | null>(null);
 const domainForm = useForm({ name: '', inbound_domain: '', is_active: true });
@@ -239,14 +241,18 @@ const checks = (d: DomainRow) =>
                     <Button
                         variant="outline"
                         size="sm"
+                        :disabled="busy.is(d.id)"
                         @click="
                             router.post(
                                 admin.domains.check.url(d.id),
                                 {},
-                                { preserveScroll: true },
+                                { preserveScroll: true, ...busy.track(d.id) },
                             )
                         "
-                        ><RefreshCw /> Cek DNS</Button
+                        ><RefreshCw
+                            :class="{ 'animate-spin': busy.is(d.id) }"
+                        />
+                        Cek DNS</Button
                     >
                     <Button
                         variant="ghost"

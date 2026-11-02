@@ -37,7 +37,7 @@ class BrevoRegisterWebhooks extends Command
         $secret = (string) config('kdimail.brevo.webhook_secret');
 
         if (! str_starts_with($base, 'https://')) {
-            $this->warn("URL $base bukan HTTPS — Brevo biasanya menolak. Pakai tunnel: docker compose --profile tunnel up tunnel");
+            $this->warn("URL $base bukan HTTPS, jadi Brevo biasanya menolak. Pakai tunnel: docker compose --profile tunnel up tunnel");
         }
 
         $errors = Cache::get(self::ERRORS_KEY, []);
@@ -88,7 +88,7 @@ class BrevoRegisterWebhooks extends Command
     {
         $hooks = [[
             'type' => 'transactional',
-            'description' => 'Surel Kendari — status pengiriman',
+            'description' => 'Surel Kendari: status pengiriman',
             'url' => "$base/webhooks/brevo/events/$secret",
             'events' => config('kdimail.brevo.events'),
         ]];
@@ -96,7 +96,7 @@ class BrevoRegisterWebhooks extends Command
         foreach (Domain::query()->where('is_active', true)->get() as $domain) {
             $hooks[] = [
                 'type' => 'inbound',
-                'description' => "Surel Kendari — email masuk {$domain->inbound_domain}",
+                'description' => "Surel Kendari: email masuk {$domain->inbound_domain}",
                 'url' => "$base/webhooks/brevo/inbound/$secret",
                 'events' => ['inboundEmailProcessed'],
                 'domain' => $domain->inbound_domain,

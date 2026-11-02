@@ -53,6 +53,15 @@ export function relative(value: string | null | undefined): string {
         : '';
 }
 
+/** Jam dalam WITA, apa pun zona waktu perangkat: "00.00 WITA". */
+export function witaTime(value: string | null | undefined): string {
+    const d = parse(value);
+
+    return d
+        ? `${d.toLocaleTimeString('id-ID', { timeZone: 'Asia/Makassar', hour: '2-digit', minute: '2-digit' })} WITA`
+        : '';
+}
+
 export function fileSize(bytes: number): string {
     if (bytes < 1024) {
         return `${bytes} B`;

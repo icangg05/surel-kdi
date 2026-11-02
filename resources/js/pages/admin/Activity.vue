@@ -66,7 +66,7 @@ const changedKeys = (r: Row) =>
     <div class="mx-auto w-full max-w-5xl space-y-5 p-4 sm:p-6">
         <PageHeader
             title="Log Aktivitas"
-            description="Jejak audit: siapa mengubah kontak, mailbox, pengguna, siaran, dan kapan — termasuk impor & ekspor data kontak."
+            description="Jejak audit perubahan kontak, mailbox, pengguna, dan siaran: siapa yang mengubah dan kapan, termasuk impor & ekspor data kontak."
         />
         <div class="rounded-xl border bg-card">
             <div class="border-b px-3 py-2">

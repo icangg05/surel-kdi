@@ -242,7 +242,7 @@ const invalid = computed(
                             />Grup {{ hit.name }}</span
                         >
                         <span class="block text-xs text-muted-foreground"
-                            >{{ hit.count }} kontak aktif — semua
+                            >{{ hit.count }} kontak aktif, semua
                             dimasukkan</span
                         >
                     </span>

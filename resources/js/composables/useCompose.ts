@@ -16,6 +16,8 @@ const state = reactive({
     open: false,
     minimized: false,
     loading: false,
+    /** Draf lama yang dibuka dari folder Draf, bukan draf yang baru dibuat. */
+    resumed: false,
     draft: null as Draft | null,
 });
 
@@ -42,6 +44,7 @@ export function useCompose() {
             });
             state.open = true;
             state.minimized = false;
+            state.resumed = false;
         } catch (e) {
             toast.error((e as Error).message);
         } finally {
@@ -56,6 +59,7 @@ export function useCompose() {
             state.draft = await json<Draft>('GET', showDraft.url(draftId));
             state.open = true;
             state.minimized = false;
+            state.resumed = true;
         } catch (e) {
             toast.error((e as Error).message);
         } finally {

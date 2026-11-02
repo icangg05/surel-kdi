@@ -312,7 +312,7 @@ const days = computed(() => estimate.value?.forecast.length ?? 0);
                     {{
                         savedAt
                             ? `Draf tersimpan otomatis ${new Date(savedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`
-                            : 'Draf — tersimpan otomatis'
+                            : 'Draf tersimpan otomatis'
                     }}
                 </p>
             </div>
@@ -520,7 +520,7 @@ const days = computed(() => estimate.value?.forecast.length ?? 0);
                                     :key="m.id"
                                     :value="m.id"
                                 >
-                                    {{ m.name }} — {{ m.address }}
+                                    {{ m.name }} &lt;{{ m.address }}&gt;
                                 </option>
                             </select>
                         </div>
@@ -531,7 +531,7 @@ const days = computed(() => estimate.value?.forecast.length ?? 0);
                                 class="h-9 rounded-md border bg-background px-3 text-sm"
                                 @change="applyTemplate"
                             >
-                                <option value="">— pilih templat —</option>
+                                <option value="">Pilih templat</option>
                                 <option
                                     v-for="t in templates"
                                     :key="t.id"
@@ -593,8 +593,9 @@ const days = computed(() => estimate.value?.forecast.length ?? 0);
                                     :key="c.id"
                                     :value="c.id"
                                 >
-                                    {{ c.name }} —
-                                    {{ c.organization || c.email }}
+                                    {{ c.name }} ({{
+                                        c.organization || c.email
+                                    }})
                                 </option>
                             </select>
                         </div>
@@ -696,15 +697,14 @@ const days = computed(() => estimate.value?.forecast.length ?? 0);
                         <p class="font-medium">Perkiraan jadwal pengiriman</p>
                         <p class="text-sm text-muted-foreground">
                             {{ number(estimate.sendable) }} email dengan kuota
-                            {{ number(estimate.limit) }}/hari
+                            {{ number(estimate.limit) }}/hari,
                             <template v-if="days > 1"
-                                >—
-                                <strong class="font-semibold text-foreground"
+                                ><strong class="font-semibold text-foreground"
                                     >selesai dalam {{ days }} hari</strong
                                 >. Sisa penerima otomatis dilanjutkan setelah
                                 kuota reset.</template
                             >
-                            <template v-else>— selesai hari ini.</template>
+                            <template v-else>selesai hari ini.</template>
                         </p>
                         <ul class="mt-3 space-y-1.5">
                             <li

@@ -31,7 +31,7 @@ class DownloadInboundAttachment implements ShouldQueue
         }
 
         if (! $brevo->configured()) {
-            $attachment->update(['error' => 'BREVO_API_KEY belum diisi — lampiran belum bisa diunduh.']);
+            $attachment->update(['error' => 'BREVO_API_KEY belum diisi, jadi lampiran belum bisa diunduh.']);
 
             return;
         }

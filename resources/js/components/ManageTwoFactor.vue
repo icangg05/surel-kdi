@@ -32,7 +32,7 @@ onUnmounted(() => clearTwoFactorAuthData());
         <Heading
             variant="small"
             title="Autentikasi dua langkah"
-            description="Lapisan pengaman tambahan saat masuk — sangat disarankan untuk admin."
+            description="Lapisan pengaman tambahan saat masuk. Sangat disarankan untuk admin."
         />
 
         <div

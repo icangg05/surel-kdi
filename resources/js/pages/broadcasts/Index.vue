@@ -55,7 +55,7 @@ const href = (b: Row) =>
     <div class="mx-auto w-full max-w-6xl space-y-5 p-4 sm:p-6">
         <PageHeader
             title="Siaran"
-            description="Satu isi, dikirim personal ke banyak kontak — tiap penerima mendapat email sendiri. Pengiriman otomatis dibagi mengikuti kuota harian Brevo."
+            description="Satu isi dikirim personal ke banyak kontak, sehingga tiap penerima mendapat email sendiri. Pengiriman otomatis dibagi mengikuti kuota harian Brevo."
         >
             <Button @click="router.post(broadcastRoutes.store.url())"
                 ><Plus /> Siaran baru</Button

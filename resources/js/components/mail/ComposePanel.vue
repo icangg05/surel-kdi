@@ -18,7 +18,6 @@ import {
     Minus,
     Paperclip,
     Send,
-    Trash2,
     Users,
     X,
 } from '@lucide/vue';
@@ -64,6 +63,8 @@ const scheduleOpen = ref(false);
 const scheduleAt = ref('');
 const picker = ref<InstanceType<typeof AttachmentPicker> | null>(null);
 let hydrating = false;
+let initial = '';
+const snapshot = () => JSON.stringify([form, attachments.value.length]);
 
 watch(
     () => state.draft,
@@ -84,6 +85,7 @@ watch(
         attachments.value = draft.attachments;
         showCc.value = draft.cc.length > 0 || draft.bcc.length > 0;
         savedAt.value = null;
+        initial = snapshot();
         queueMicrotask(() => (hydrating = false));
     },
     { immediate: true },
@@ -179,21 +181,26 @@ const presets = computed(() => {
     }));
 });
 
+// Tombol X membuang draf. Konfirmasi hanya bila ada yang hilang: isinya sudah
+// diubah, atau draf lama yang dibuka dari folder Draf.
 async function discard() {
-    if (!state.draft || !confirm('Buang draf ini?')) {
+    if (!state.draft) {
+        return;
+    }
+
+    const changed = state.resumed || snapshot() !== initial;
+
+    if (changed && !confirm('Buang draf ini?')) {
         return;
     }
 
     await json('DELETE', destroyDraft.url(state.draft.id));
     close();
     router.reload({ only: ['mail', 'rows'] });
-    toast.success('Draf dibuang.');
-}
 
-async function closePanel() {
-    await save();
-    close();
-    router.reload({ only: ['mail', 'rows'] });
+    if (changed) {
+        toast.success('Draf dibuang.');
+    }
 }
 
 async function convertToBroadcast() {
@@ -233,8 +240,9 @@ async function convertToBroadcast() {
             <button
                 type="button"
                 class="rounded p-1 hover:bg-accent"
-                aria-label="Tutup"
-                @click="closePanel"
+                aria-label="Buang draf"
+                title="Buang draf"
+                @click="discard"
             >
                 <X class="size-4" />
             </button>
@@ -266,8 +274,9 @@ async function convertToBroadcast() {
                 >
                 <button
                     type="button"
-                    class="hidden rounded p-1 hover:bg-accent sm:block"
-                    aria-label="Minimalkan"
+                    class="rounded p-1 hover:bg-accent"
+                    aria-label="Minimalkan (draf tersimpan)"
+                    title="Minimalkan (draf tersimpan)"
                     @click="state.minimized = true"
                 >
                     <Minus class="size-4" />
@@ -275,8 +284,9 @@ async function convertToBroadcast() {
                 <button
                     type="button"
                     class="rounded p-1 hover:bg-accent"
-                    aria-label="Tutup (draf tersimpan)"
-                    @click="closePanel"
+                    aria-label="Buang draf"
+                    title="Buang draf"
+                    @click="discard"
                 >
                     <X class="size-4" />
                 </button>
@@ -444,15 +454,6 @@ async function convertToBroadcast() {
                 <span class="hidden text-xs text-muted-foreground sm:inline"
                     >Ctrl+Enter untuk kirim</span
                 >
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    class="ml-auto text-muted-foreground hover:text-destructive"
-                    aria-label="Buang draf"
-                    title="Buang draf"
-                    @click="discard"
-                    ><Trash2
-                /></Button>
             </footer>
         </section>
     </Teleport>

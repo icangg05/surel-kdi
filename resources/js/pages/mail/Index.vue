@@ -31,6 +31,7 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { useBusy } from '@/composables/useBusy';
 import { useCompose } from '@/composables/useCompose';
 import { useShortcuts } from '@/composables/useShortcuts';
 import broadcastRoutes from '@/routes/broadcasts';
@@ -50,6 +51,7 @@ const props = defineProps<{
 }>();
 
 const page = usePage();
+const busy = useBusy();
 const compose = useCompose();
 
 const TITLES: Record<string, string> = {
@@ -377,8 +379,15 @@ const unreadLabel = computed(() => {
                             variant="ghost"
                             size="icon-sm"
                             aria-label="Muat ulang"
-                            @click="router.reload({ only: ['rows', 'mail'] })"
+                            :disabled="busy.is('inbox')"
+                            @click="
+                                router.reload({
+                                    only: ['rows', 'mail'],
+                                    ...busy.track('inbox'),
+                                })
+                            "
                             ><RefreshCw
+                                :class="{ 'animate-spin': busy.is('inbox') }"
                         /></Button>
                     </TooltipTrigger>
                     <TooltipContent>Muat ulang</TooltipContent>

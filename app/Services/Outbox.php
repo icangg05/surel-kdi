@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\DeliveryStatus;
 use App\Enums\MessageStatus;
+use App\Events\MailboxUpdated;
 use App\Jobs\SendMessage;
 use App\Mail\OutgoingMail;
 use App\Models\Contact;
@@ -117,12 +118,14 @@ class Outbox
         ]);
         Contact::query()->whereIn('id', $message->deliveries()->whereNotNull('contact_id')->select('contact_id'))->update(['last_contacted_at' => $now]);
         $message->thread?->refreshSummary();
+        MailboxUpdated::dispatch($message->mailbox_id, 'status', $message->thread_id);
     }
 
     public function markFailed(Message $message, Throwable $e): void
     {
         $message->update(['status' => MessageStatus::Failed, 'error' => mb_substr($e->getMessage(), 0, 250)]);
         $message->deliveries()->update(['status' => DeliveryStatus::Failed, 'failed_at' => now(), 'error' => mb_substr($e->getMessage(), 0, 250)]);
+        MailboxUpdated::dispatch($message->mailbox_id, 'status', $message->thread_id);
     }
 
     /** Tiap menit: lepas email terjadwal yang jatuh tempo dan yang menunggu kuota. */

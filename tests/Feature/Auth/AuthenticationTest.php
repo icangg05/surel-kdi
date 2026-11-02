@@ -19,6 +19,16 @@ class AuthenticationTest extends TestCase
         $response->assertOk();
     }
 
+    public function test_password_reset_is_not_available()
+    {
+        $user = User::factory()->create();
+
+        $this->get('/forgot-password')->assertNotFound();
+        $this->post('/forgot-password', ['email' => $user->email])->assertNotFound();
+        $this->get('/reset-password/token')->assertNotFound();
+        $this->post('/reset-password', ['token' => 'token', 'email' => $user->email, 'password' => 'baru12345', 'password_confirmation' => 'baru12345'])->assertNotFound();
+    }
+
     public function test_users_can_authenticate_using_the_login_screen()
     {
         $user = User::factory()->create();

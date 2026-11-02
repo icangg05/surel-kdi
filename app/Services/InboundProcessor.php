@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\Folder;
 use App\Enums\MessageStatus;
+use App\Events\MailboxUpdated;
 use App\Jobs\DownloadInboundAttachment;
 use App\Jobs\ProcessInboundEmail;
 use App\Mail\OutgoingMail;
@@ -153,6 +154,12 @@ class InboundProcessor
             $delivery?->update(['replied_at' => $delivery->replied_at ?? now(), 'thread_id' => $thread->id]);
 
             $payload->update(['processed_at' => now(), 'message_id' => $message->id, 'error' => null]);
+
+            MailboxUpdated::dispatch($mailbox->id, 'received', $thread->id, [
+                'from' => $from['name'] ?: $from['email'],
+                'subject' => $subject,
+                'spam' => $isSpam,
+            ]);
 
             return $message;
         });

@@ -30,7 +30,7 @@ defineOptions({
     <div class="mx-auto w-full max-w-5xl space-y-5 p-4 sm:p-6">
         <PageHeader
             title="Templat"
-            description="Isi siaran yang sering dipakai — surat edaran, undangan rapat, pemberitahuan. Merge field seperti {{nama}} diisi otomatis per penerima."
+            description="Isi siaran yang sering dipakai, seperti surat edaran, undangan rapat, dan pemberitahuan. Merge field, misalnya {{nama}}, diisi otomatis per penerima."
         >
             <Button as-child
                 ><Link :href="templateRoutes.create()"

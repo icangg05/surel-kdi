@@ -109,6 +109,17 @@ class OutgoingMailTest extends MailTestCase
         $this->assertSame('balasan-1@example.com', Message::find($draft['id'])->in_reply_to);
     }
 
+    public function test_new_draft_opens_with_the_signature_without_blank_lines_above(): void
+    {
+        $this->mailbox->update(['signature_html' => '<p>Salam,<br>Dinas Kominfo</p>']);
+
+        $body = $this->actingAs($this->admin)->postJson(route('drafts.store'), ['mailbox_id' => $this->mailbox->id])->assertOk()->json('body_html');
+        $this->assertSame('<div data-signature><p>Salam,<br>Dinas Kominfo</p></div>', $body);
+
+        $this->mailbox->update(['signature_html' => null]);
+        $this->assertSame('<p></p>', $this->postJson(route('drafts.store'), ['mailbox_id' => $this->mailbox->id])->json('body_html'));
+    }
+
     public function test_unauthorized_ip_fails_fast_with_clear_message_and_banner(): void
     {
         $message = $this->draft([['email' => 'budi@example.com']]);

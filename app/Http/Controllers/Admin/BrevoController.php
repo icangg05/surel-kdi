@@ -64,12 +64,19 @@ class BrevoController extends Controller
                 'account' => Cache::get(BrevoSyncAccount::CACHE_KEY),
                 'error' => $error,
             ],
-            'webhooks' => $webhooks,
-            'expected' => collect(BrevoRegisterWebhooks::plan($base, $secret))->map(fn ($h) => [
-                ...collect($h)->only('type', 'description', 'domain')->all(),
-                'url' => str_replace($secret, Str::mask($secret, '•', 4), $h['url']),
-                'error' => Cache::get(BrevoRegisterWebhooks::ERRORS_KEY, [])[BrevoRegisterWebhooks::key($h)] ?? null,
-            ]),
+            'webhooks' => $webhooks?->map(fn ($w) => [...$w, 'url' => str_replace($secret, Str::mask($secret, '•', 4), $w['url'])]),
+            'expected' => collect(BrevoRegisterWebhooks::plan($base, $secret))->map(function ($h) use ($webhooks, $secret) {
+                $ours = $webhooks?->filter(fn ($w) => $w['ours'] && $w['type'] === $h['type'] && ($h['type'] !== 'inbound' || $w['domain'] === $h['domain']));
+
+                return [
+                    ...collect($h)->only('type', 'description', 'domain')->all(),
+                    'url' => str_replace($secret, Str::mask($secret, '•', 4), $h['url']),
+                    'registered' => (bool) $ours?->contains('url', $h['url']),
+                    // Webhook kita yang masih menunjuk URL lain (mis. tunnel lama): Brevo mengirim ke alamat mati.
+                    'stale' => $ours?->reject(fn ($w) => $w['url'] === $h['url'])->map(fn ($w) => parse_url($w['url'], PHP_URL_HOST))->first(),
+                    'error' => Cache::get(BrevoRegisterWebhooks::ERRORS_KEY, [])[BrevoRegisterWebhooks::key($h)] ?? null,
+                ];
+            }),
             'publicUrl' => str_starts_with($base, 'https://'),
             'inbound' => InboundPayload::query()->latest()->limit(15)->get()->map(fn (InboundPayload $p) => [
                 'id' => $p->id,

@@ -44,7 +44,7 @@ services:
   # lampiran Brevo. Matikan servis ini dan email berhenti berangkat.
   queue:
     <<: *app
-    command: php artisan queue:work --queue=default,broadcast --tries=5 --sleep=2 --max-time=3600
+    command: php artisan queue:work --queue=realtime,default,broadcast --tries=5 --sleep=2 --max-time=3600
     # SIGTERM saat redeploy: queue:work menuntaskan job yang sedang jalan dulu.
     # Bawaan Docker 10 detik terlalu pendek untuk kiriman yang lambat ke Brevo.
     stop_grace_period: 60s
@@ -55,6 +55,17 @@ services:
   scheduler:
     <<: *app
     command: php artisan schedule:work
+    healthcheck:
+      disable: true
+
+  # Server WebSocket Reverb: email masuk & status kirim muncul tanpa muat ulang.
+  # nginx host meneruskan wss://domain/app/ ke sini; Laravel menerbitkan event
+  # langsung ke reverb:8080 di jaringan compose.
+  reverb:
+    <<: *app
+    command: php artisan reverb:start --host=0.0.0.0 --port=8080
+    ports:
+      - '127.0.0.1:${REVERB_EXPOSE_PORT:-8012}:8080'
     healthcheck:
       disable: true
 

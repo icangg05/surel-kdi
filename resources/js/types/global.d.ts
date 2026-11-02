@@ -22,6 +22,13 @@ declare module '@inertiajs/core' {
             auth: Auth;
             sidebarOpen: boolean;
             mail: MailShared | null;
+            /** Alamat Reverb untuk browser; null bila broadcasting tidak memakai Reverb. */
+            realtime: {
+                key: string;
+                host: string;
+                port: number;
+                scheme: 'http' | 'https';
+            } | null;
             [key: string]: unknown;
         };
     }
